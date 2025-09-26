@@ -1,0 +1,2403 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Pedidos - Espetinho do Barreto</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.5s ease;
+        }
+        .form-container {
+            background-color: white;
+            z-index: 10;
+        }
+        .auth-view, .app-container {
+            display: none;
+        }
+        .auth-view.active, .app-container.active {
+            display: block;
+        }
+        #auth-section {
+            position: relative;
+            overflow: hidden;
+        }
+        @keyframes float {
+            0% { transform: translateY(0px) rotate(-45deg); }
+            50% { transform: translateY(-20px) rotate(-43deg); }
+            100% { transform: translateY(0px) rotate(-45deg); }
+        }
+        #auth-section::before, #auth-section::after {
+            content: '';
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill='%23A16207' stroke='%23713F12' stroke-width='2'%3E%3Cpath d='M10 90 L90 10' stroke-width='5' stroke-linecap='round' stroke='%23713F12'/%3E%3Ccircle cx='40' cy='60' r='12'/%3E%3Ccircle cx='55' cy='45' r='12'/%3E%3Ccircle cx='70' cy='30' r='12'/%3E%3C/g%3E%3C/svg%3E");
+            background-size: contain;
+            background-repeat: no-repeat;
+            opacity: 0.1;
+            z-index: 1;
+        }
+        #auth-section::before {
+            top: -50px;
+            left: -50px;
+            transform: rotate(-45deg);
+            animation: float 8s ease-in-out infinite;
+        }
+        #auth-section::after {
+            bottom: -50px;
+            right: -50px;
+            transform: rotate(135deg);
+            animation: float 8s ease-in-out infinite reverse;
+        }
+        #toast-container {
+            position: fixed;
+            top: 1.25rem;
+            right: 1.25rem;
+            z-index: 110;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .toast {
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.5s ease-in-out;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        .nav-tab, .sub-nav-tab {
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        .nav-tab.active, .sub-nav-tab.active {
+            background-color: #c2410c; /* amber-700 */
+            color: white;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .view, .subview {
+            display: none;
+        }
+        .view.active, .subview.active {
+            display: block;
+        }
+        .history-folder-content {
+            max-height: 0;
+            transition: max-height 0.5s ease-in-out;
+            overflow: hidden;
+        }
+        .folder-icon {
+            transition: transform 0.3s ease-in-out;
+        }
+        .cart-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            border-radius: 9999px;
+            background-color: #dc2626; /* red-600 */
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+            transform: scale(0);
+            transition: transform 0.2s ease-in-out;
+        }
+        .cart-badge.visible {
+            transform: scale(1);
+        }
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .modal-overlay.visible {
+            display: flex;
+        }
+        .modal-view {
+            display: none;
+        }
+        .modal-view.active {
+            display: block;
+        }
+        #floating-menu-btn, #floating-gerenciar-btn {
+            opacity: 0;
+            transform: scale(0.8);
+            pointer-events: none;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        #floating-menu-btn.visible, #floating-gerenciar-btn.visible {
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: auto;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #c2410c;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .password-toggle {
+            cursor: pointer;
+            user-select: none; /* Impede a seleção do texto do ícone */
+        }
+        .password-length-error {
+            display: none;
+            color: #dc2626; /* red-600 */
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+        }
+    </style>
+</head>
+<body class="bg-stone-100">
+
+    <div id="toast-container"></div>
+    
+    <!-- Auth Section -->
+    <div id="auth-section" class="auth-view active">
+        <!-- Forgot Password Request Modal -->
+        <div id="forgot-password-modal" class="modal-overlay p-4">
+            <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full">
+                <h3 class="text-2xl font-bold text-center mb-4">Solicitar Nova Senha</h3>
+                <p class="text-center text-stone-600 mb-6">Digite seu CPF. Uma solicitação será enviada ao administrador para aprovar a mudança de senha.</p>
+                <form id="forgot-password-form">
+                    <div>
+                        <label for="forgot-cpf" class="block text-sm font-medium text-stone-700">CPF</label>
+                        <input type="text" id="forgot-cpf" required class="mt-1 block w-full bg-stone-100 border border-stone-300 rounded-md shadow-sm py-2 px-3 text-stone-900 focus:outline-none focus:ring-amber-500 focus:border-amber-500" placeholder="000.000.000-00" maxlength="14">
+                    </div>
+                    <div class="mt-6 flex gap-4">
+                        <button type="button" id="cancel-forgot-btn" class="w-full bg-stone-400 hover:bg-stone-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">Cancelar</button>
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Solicitar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="min-h-screen flex items-center justify-center p-4">
+            <div class="form-container max-w-md w-full p-8 rounded-2xl shadow-xl">
+                
+                <!-- Login Form -->
+                <div id="login-view" class="auth-view active">
+                    <div class="text-center mb-8">
+                         <div class="w-24 h-24 mx-auto mb-4 flex items-center justify-center bg-amber-200 rounded-full shadow-md">
+                            <div class="relative w-24 h-24 flex items-center justify-center scale-75">
+                                <div class="w-2 h-20 bg-yellow-700 rounded-full transform -rotate-45"></div>
+                                <div class="absolute w-6 h-6 bg-amber-700 rounded-lg shadow-sm" style="top: 18px; left: 32px;"></div>
+                                <div class="absolute w-6 h-6 bg-amber-700 rounded-lg shadow-sm" style="top: 36px; left: 42px;"></div>
+                                <div class="absolute w-6 h-6 bg-amber-700 rounded-lg shadow-sm" style="top: 54px; left: 52px;"></div>
+                            </div>
+                        </div>
+                        <h1 class="text-3xl font-bold text-amber-800">Espetinho do Barreto</h1>
+                        <p class="text-stone-600 mt-2">Faça login para continuar</p>
+                    </div>
+                    <form id="login-form" class="space-y-6">
+                        <div>
+                            <label for="login-cpf" class="block text-sm font-medium text-stone-700">CPF</label>
+                            <input type="text" id="login-cpf" name="login-cpf" required
+                                   class="mt-1 block w-full bg-stone-100 border border-stone-300 rounded-md shadow-sm py-2 px-3 text-stone-900 focus:outline-none focus:ring-amber-500 focus:border-amber-500"
+                                   placeholder="000.000.000-00" maxlength="14">
+                        </div>
+                        <div>
+                            <label for="login-password" class="block text-sm font-medium text-stone-700">Senha</label>
+                            <div class="relative mt-1">
+                                <input type="password" id="login-password" name="login-password" required maxlength="11"
+                                       class="block w-full bg-stone-100 border border-stone-300 rounded-md shadow-sm py-2 px-3 text-stone-900 focus:outline-none focus:ring-amber-500 focus:border-amber-500 pr-10">
+                                <span class="password-toggle absolute inset-y-0 right-0 flex items-center pr-3 text-stone-400">
+                                    👁️
+                                </span>
+                            </div>
+                            <p class="password-length-error">Só é possível digitar até 11 caracteres.</p>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <input id="remember-me" name="remember-me" type="checkbox" class="h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded">
+                                <label for="remember-me" class="ml-2 block text-sm text-stone-900">
+                                    Manter login
+                                </label>
+                            </div>
+                            <div class="text-sm">
+                                <a href="#" id="forgot-password-link" class="font-medium text-amber-700 hover:text-amber-600">Esqueceu a senha?</a>
+                            </div>
+                        </div>
+                        <div>
+                            <button type="submit"
+                                    class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-amber-700 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors">
+                                Entrar
+                            </button>
+                        </div>
+                    </form>
+                    <p class="mt-6 text-center text-sm text-stone-600">
+                        Não tem uma conta?
+                        <a href="#" id="show-register-link" class="font-medium text-amber-700 hover:text-amber-600">
+                            Cadastre-se
+                        </a>
+                    </p>
+                </div>
+
+                <!-- Register Form -->
+                <div id="register-view" class="auth-view">
+                    <div class="text-center mb-8">
+                        <h1 class="text-3xl font-bold text-amber-800">Crie sua Conta</h1>
+                        <p class="text-stone-600 mt-2">É rápido e fácil.</p>
+                    </div>
+                    <form id="register-form" class="space-y-4">
+                         <div>
+                            <label for="register-name" class="block text-sm font-medium text-stone-700">Nome Completo</label>
+                            <input type="text" id="register-name" name="register-name" required
+                                   class="mt-1 block w-full bg-stone-100 border border-stone-300 rounded-md shadow-sm py-2 px-3 text-stone-900 focus:outline-none focus:ring-amber-500 focus:border-amber-500">
+                        </div>
+                        <div>
+                            <label for="register-cpf" class="block text-sm font-medium text-stone-700">CPF</label>
+                            <input type="text" id="register-cpf" name="register-cpf" required
+                                   class="mt-1 block w-full bg-stone-100 border border-stone-300 rounded-md shadow-sm py-2 px-3 text-stone-900 focus:outline-none focus:ring-amber-500 focus:border-amber-500"
+                                   placeholder="000.000.000-00" maxlength="14">
+                        </div>
+                        <div>
+                            <label for="register-password" class="block text-sm font-medium text-stone-700">Senha</label>
+                            <div class="relative mt-1">
+                                <input type="password" id="register-password" name="register-password" required maxlength="11"
+                                       class="block w-full bg-stone-100 border border-stone-300 rounded-md shadow-sm py-2 px-3 text-stone-900 focus:outline-none focus:ring-amber-500 focus:border-amber-500 pr-10">
+                                <span class="password-toggle absolute inset-y-0 right-0 flex items-center pr-3 text-stone-400">
+                                    👁️
+                                </span>
+                            </div>
+                             <p class="password-length-error">Só é possível digitar até 11 caracteres.</p>
+                        </div>
+                        <div>
+                            <button type="submit"
+                                    class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-amber-700 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors">
+                                Concluir Cadastro
+                            </button>
+                        </div>
+                    </form>
+                    <p class="mt-6 text-center text-sm text-stone-600">
+                        Já tem uma conta?
+                        <a href="#" id="show-login-link" class="font-medium text-amber-700 hover:text-amber-600">
+                            Faça login
+                        </a>
+                    </p>
+                </div>
+
+                 <!-- Reset Password View -->
+                <div id="reset-password-view" class="auth-view">
+                    <div class="text-center mb-8">
+                        <h1 class="text-3xl font-bold text-amber-800">Redefinir Senha</h1>
+                        <p class="text-stone-600 mt-2">Crie uma nova senha para sua conta.</p>
+                    </div>
+                    <form id="reset-password-form" class="space-y-4">
+                        <input type="hidden" id="reset-cpf">
+                        <div>
+                            <label for="reset-new-password" class="block text-sm font-medium text-stone-700">Nova Senha</label>
+                            <div class="relative mt-1">
+                                <input type="password" id="reset-new-password" required maxlength="11" class="block w-full bg-stone-100 border border-stone-300 rounded-md shadow-sm py-2 px-3 text-stone-900 focus:outline-none focus:ring-amber-500 focus:border-amber-500 pr-10">
+                                <span class="password-toggle absolute inset-y-0 right-0 flex items-center pr-3 text-stone-400">
+                                    👁️
+                                </span>
+                            </div>
+                            <p class="password-length-error">Só é possível digitar até 11 caracteres.</p>
+                        </div>
+                        <div>
+                            <label for="reset-confirm-password" class="block text-sm font-medium text-stone-700">Confirmar Nova Senha</label>
+                            <div class="relative mt-1">
+                                <input type="password" id="reset-confirm-password" required maxlength="11" class="block w-full bg-stone-100 border border-stone-300 rounded-md shadow-sm py-2 px-3 text-stone-900 focus:outline-none focus:ring-amber-500 focus:border-amber-500 pr-10">
+                                <span class="password-toggle absolute inset-y-0 right-0 flex items-center pr-3 text-stone-400">
+                                    👁️
+                                </span>
+                            </div>
+                            <p class="password-length-error">Só é possível digitar até 11 caracteres.</p>
+                        </div>
+                        <div>
+                            <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-amber-700 hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors">
+                                Salvar Nova Senha
+                            </button>
+                        </div>
+                    </form>
+                      <p class="mt-6 text-center text-sm text-stone-600">
+                        Lembrou a senha?
+                        <a href="#" id="back-to-login-link" class="font-medium text-amber-700 hover:text-amber-600">
+                            Voltar para o login
+                        </a>
+                    </p>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- App Section -->
+    <div id="app-section" class="app-container">
+        <!-- Payment Modal -->
+        <div id="payment-modal" class="modal-overlay">
+            <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+                <div id="payment-selection-view" class="modal-view active p-8">
+                    <h3 class="text-2xl font-bold text-center mb-6">Forma de Pagamento</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <button id="pay-cash-btn" class="flex flex-col items-center justify-center p-4 bg-green-100 hover:bg-green-200 rounded-lg transition-colors border-2 border-green-200">
+                            <span class="text-5xl">💵</span>
+                            <span class="mt-2 font-semibold text-green-800">Dinheiro</span>
+                        </button>
+                        <button id="pay-pix-btn" class="flex flex-col items-center justify-center p-4 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors border-2 border-blue-200">
+                            <span class="text-5xl">❖</span>
+                            <span class="mt-2 font-semibold text-blue-800">Pix</span>
+                        </button>
+                    </div>
+                    <button id="cancel-payment-btn" class="mt-6 w-full bg-stone-400 hover:bg-stone-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">Cancelar</button>
+                </div>
+                <div id="pix-details-view" class="modal-view p-8">
+                    <h3 class="text-2xl font-bold text-center mb-4">Pagamento via Pix</h3>
+                    <div class="bg-stone-100 p-4 rounded-lg space-y-2">
+                        <p><strong>Nome:</strong> Antônio Barreto da Silva Filho</p>
+                        <p><strong>Banco:</strong> Caixa Econômica Federal</p>
+                        <div class="flex items-center justify-between">
+                            <p><strong>Chave Pix (CPF):</strong> <span id="pix-key">707.474.234-15</span></p>
+                            <button id="copy-pix-key-btn" class="bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold py-1 px-3 rounded-lg transition-colors">Copiar</button>
+                        </div>
+                    </div>
+                    <div class="mt-6">
+                        <label for="pix-proof-input" class="block text-sm font-medium text-stone-700 mb-2">Anexe o comprovante:</label>
+                        <input type="file" id="pix-proof-input" accept="image/*,application/pdf" class="block w-full text-sm text-stone-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200"/>
+                        <p id="file-name-display" class="text-xs text-stone-500 mt-1"></p>
+                    </div>
+                    <div class="mt-6 flex justify-around">
+                         <button id="back-to-payment-selection-btn" class="bg-stone-400 hover:bg-stone-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">Voltar</button>
+                        <button id="confirm-pix-payment-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>Confirmar Pagamento</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Cash Payment Confirmation Modal -->
+        <div id="cash-confirm-modal" class="modal-overlay p-4">
+            <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full relative">
+                <button id="close-cash-confirm-modal-btn" class="absolute top-2 right-4 text-3xl font-bold text-stone-500 hover:text-stone-800">&times;</button>
+                <h3 class="text-2xl font-bold text-center mb-4">Confirmar Pagamento em Dinheiro</h3>
+                <p class="text-center text-stone-600 mb-6">Você selecionou pagamento em dinheiro. Deseja confirmar e enviar o pedido?</p>
+                <div class="mt-6 flex gap-4">
+                    <button type="button" id="cancel-cash-confirm-btn" class="w-full bg-stone-400 hover:bg-stone-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">Voltar</button>
+                    <button type="button" id="confirm-cash-payment-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Confirmar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gemini Suggestion Modal -->
+        <div id="suggestion-modal" class="modal-overlay p-4">
+            <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full text-center flex flex-col h-auto max-h-[90vh]">
+                <h3 class="text-2xl font-bold text-amber-800 mb-4 flex-shrink-0">💨 Sugestão do Chef 🍢</h3>
+                <div id="suggestion-content" class="flex-grow flex items-center justify-center relative min-h-[200px]">
+                    <div class="loader mx-auto"></div>
+                    <p class="ml-4">Gerando uma sugestão deliciosa...</p>
+                </div>
+                <div id="suggestion-actions" class="mt-4 space-y-3 flex-shrink-0">
+                     <!-- Botões de adicionar ao carrinho serão injetados aqui -->
+                </div>
+                <div class="mt-4 flex-shrink-0">
+                    <button id="close-suggestion-btn" class="w-full bg-stone-400 hover:bg-stone-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">Fechar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Proof Viewer Modal -->
+        <div id="proof-modal" class="modal-overlay p-4">
+            <div class="bg-white rounded-lg shadow-xl p-4 max-w-lg w-full h-3/4 flex flex-col">
+                <div class="flex justify-between items-center mb-2 flex-shrink-0">
+                    <h3 class="text-xl font-bold text-stone-800">Visualizador de Comprovante</h3>
+                    <button id="close-proof-modal-btn" class="text-3xl font-bold text-stone-500 hover:text-stone-800">&times;</button>
+                </div>
+                <div id="proof-content" class="flex-grow border rounded-lg overflow-hidden bg-gray-700 flex justify-center items-center">
+                    <!-- Iframe or Img will be inserted here by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Unlock Master Role Modal -->
+        <div id="unlock-modal" class="modal-overlay p-4">
+            <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full">
+                <h3 id="unlock-title" class="text-2xl font-bold text-center mb-4"></h3>
+                <p id="unlock-prompt-message" class="text-center text-stone-600 mb-6"></p>
+                <form id="unlock-form">
+                    <div class="relative mt-1">
+                        <label for="unlock-password" class="block text-sm font-medium text-stone-700">Senha de Segurança</label>
+                        <input type="password" id="unlock-password" required maxlength="11" class="block w-full bg-stone-100 border border-stone-300 rounded-md shadow-sm py-2 px-3 text-stone-900 focus:outline-none focus:ring-amber-500 focus:border-amber-500 pr-10">
+                        <span class="password-toggle absolute inset-y-0 right-0 flex items-center pr-3 text-stone-400">
+                            👁️
+                        </span>
+                    </div>
+                    <p class="password-length-error">Só é possível digitar até 11 caracteres.</p>
+                    <div class="mt-6 flex gap-4">
+                        <button type="button" id="cancel-unlock-btn" class="w-full bg-stone-400 hover:bg-stone-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">Cancelar</button>
+                        <button type="submit" id="submit-unlock-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Desbloquear</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Change Password Modal -->
+        <div id="change-password-modal" class="modal-overlay p-4">
+            <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full">
+                <h3 class="text-2xl font-bold text-center mb-4">Mudar Senha</h3>
+                <p id="change-password-user-info" class="text-center text-stone-600 mb-6"></p>
+                <form id="change-password-form">
+                    <div class="space-y-4">
+                        <div>
+                            <label for="new-password" class="block text-sm font-medium text-stone-700">Nova Senha</label>
+                            <div class="relative mt-1">
+                                <input type="password" id="new-password" required maxlength="11" class="block w-full bg-stone-100 border border-stone-300 rounded-md shadow-sm py-2 px-3 text-stone-900 focus:outline-none focus:ring-amber-500 focus:border-amber-500 pr-10">
+                                <span class="password-toggle absolute inset-y-0 right-0 flex items-center pr-3 text-stone-400">
+                                    👁️
+                                </span>
+                            </div>
+                            <p class="password-length-error">Só é possível digitar até 11 caracteres.</p>
+                        </div>
+                        <div>
+                            <label for="confirm-new-password" class="block text-sm font-medium text-stone-700">Confirmar Nova Senha</label>
+                            <div class="relative mt-1">
+                                <input type="password" id="confirm-new-password" required maxlength="11" class="block w-full bg-stone-100 border border-stone-300 rounded-md shadow-sm py-2 px-3 text-stone-900 focus:outline-none focus:ring-amber-500 focus:border-amber-500 pr-10">
+                                <span class="password-toggle absolute inset-y-0 right-0 flex items-center pr-3 text-stone-400">
+                                    👁️
+                                </span>
+                            </div>
+                            <p class="password-length-error">Só é possível digitar até 11 caracteres.</p>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex gap-4">
+                        <button type="button" id="cancel-change-password-btn" class="w-full bg-stone-400 hover:bg-stone-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">Cancelar</button>
+                        <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Salvar Nova Senha</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Delete User Confirmation Modal -->
+        <div id="delete-confirm-modal" class="modal-overlay p-4">
+            <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full">
+                <h3 class="text-2xl font-bold text-center mb-4">Confirmar Exclusão</h3>
+                <p id="delete-confirm-message" class="text-center text-stone-600 mb-6"></p>
+                <div class="mt-6 flex gap-4">
+                    <button type="button" id="cancel-delete-btn" class="w-full bg-stone-400 hover:bg-stone-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">Cancelar</button>
+                    <button type="button" id="confirm-delete-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Excluir</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Force Password Reset Confirmation Modal -->
+        <div id="force-reset-confirm-modal" class="modal-overlay p-4">
+            <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full relative">
+                 <button id="close-force-reset-modal-btn" class="absolute top-2 right-4 text-3xl font-bold text-stone-500 hover:text-stone-800">&times;</button>
+                <h3 class="text-2xl font-bold text-center mb-4">Ação Necessária</h3>
+                <p id="force-reset-message" class="text-center text-stone-600 mb-6"></p>
+                <div class="mt-6 flex gap-4">
+                    <button type="button" id="cancel-force-reset-btn" class="w-full bg-stone-400 hover:bg-stone-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">Não, Manter Senha Padrão</button>
+                    <button type="button" id="confirm-force-reset-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Sim, Forçar Troca</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Clear Cart Confirmation Modal -->
+        <div id="clear-cart-confirm-modal" class="modal-overlay p-4">
+            <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full">
+                <h3 class="text-2xl font-bold text-center mb-4">Confirmar Ação</h3>
+                <p class="text-center text-stone-600 mb-6">Tem certeza que deseja limpar todos os itens do carrinho?</p>
+                <div class="mt-6 flex gap-4">
+                    <button type="button" id="cancel-clear-cart-btn" class="w-full bg-stone-400 hover:bg-stone-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">Cancelar</button>
+                    <button type="button" id="confirm-clear-cart-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Limpar</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Complete Order Confirmation Modal -->
+        <div id="complete-order-confirm-modal" class="modal-overlay p-4">
+            <div class="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full relative">
+                <button id="close-complete-order-modal-btn" class="absolute top-2 right-4 text-3xl font-bold text-stone-500 hover:text-stone-800">&times;</button>
+                <h3 class="text-2xl font-bold text-center mb-4">Confirmar Recebimento</h3>
+                <p id="complete-order-message" class="text-center text-stone-600 mb-6">Tem certeza que deseja marcar este pedido como recebido?</p>
+                <div class="mt-6 flex gap-4">
+                    <button type="button" id="cancel-complete-order-btn" class="w-full bg-stone-400 hover:bg-stone-500 text-white font-bold py-2 px-6 rounded-lg transition-colors">Voltar</button>
+                    <button type="button" id="confirm-complete-order-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg transition-colors">Confirmar</button>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-6xl">
+            <header class="text-center mb-8">
+                <div class="w-24 h-24 mx-auto mb-4 flex items-center justify-center bg-amber-200 rounded-full shadow-md">
+                    <div class="relative w-24 h-24 flex items-center justify-center scale-75">
+                        <div class="w-2 h-20 bg-yellow-700 rounded-full transform -rotate-45"></div>
+                        <div class="absolute w-6 h-6 bg-amber-700 rounded-lg shadow-sm" style="top: 18px; left: 32px;"></div>
+                        <div class="absolute w-6 h-6 bg-amber-700 rounded-lg shadow-sm" style="top: 36px; left: 42px;"></div>
+                        <div class="absolute w-6 h-6 bg-amber-700 rounded-lg shadow-sm" style="top: 54px; left: 52px;"></div>
+                    </div>
+                </div>
+                <h1 class="text-4xl sm:text-5xl font-bold text-amber-800">Espetinho do Barreto</h1>
+            </header>
+
+            <nav class="flex justify-center items-center mb-8 bg-stone-200 p-2 rounded-xl shadow-inner text-sm sm:text-base flex-wrap gap-1">
+                <button data-view="cardapio-view" class="nav-tab active flex-grow py-2 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 min-w-max">
+                    <span class="text-xl">📖</span>
+                    <span>Cardápio</span>
+                </button>
+                <button data-view="cart-view" class="nav-tab flex-grow py-2 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 min-w-max">
+                    <span class="text-xl">🛒</span>
+                    <span>Carrinho</span>
+                    <span id="cart-badge" class="cart-badge">0</span>
+                </button>
+                <button data-view="active-orders-view" class="nav-tab flex-grow py-2 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 min-w-max">
+                    <span class="text-xl">⏰</span>
+                    <span>Acompanhar</span>
+                </button>
+                <button data-view="finalizado-view" class="nav-tab flex-grow py-2 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 min-w-max">
+                    <span class="text-xl">✅</span>
+                    <span>Finalizados</span>
+                </button>
+                <button data-view="historico-view" class="nav-tab flex-grow py-2 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 min-w-max">
+                    <span class="text-xl">📜</span>
+                    <span>Histórico</span>
+                </button>
+                <button data-view="gerenciar-view" class="nav-tab flex-grow py-2 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 min-w-max">
+                    <span class="text-xl">⚙️</span>
+                    <span>Gerenciar</span>
+                </button>
+            </nav>
+
+            <main>
+                <section id="cardapio-view" class="view active">
+                    <div class="text-center mb-8">
+                        <h2 class="text-3xl font-semibold">Nossos Espetos</h2>
+                        <p class="mt-2 text-md text-stone-600 max-w-2xl mx-auto">Escolha seu espeto favorito ou peça uma sugestão!</p>
+                         <div id="cardapio-actions" class="mt-4 flex justify-center items-center gap-4 flex-wrap">
+                             <button id="chef-suggestion-btn" class="bg-amber-700 hover:bg-amber-800 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg">🍢 Sugestão do Chef</button>
+                         </div>
+                    </div>
+                    <div id="espetos-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6"></div>
+                </section>
+
+                <section id="cart-view" class="view">
+                    <div id="cart-content"></div>
+                </section>
+
+                <section id="active-orders-view" class="view">
+                    <div class="text-center mb-8">
+                        <h2 class="text-3xl font-semibold">Pedidos em Preparo</h2>
+                        <p class="mt-2 text-md text-stone-600 max-w-2xl mx-auto">Acompanhe seus pedidos. Quando receber, clique no botão para confirmar a entrega.</p>
+                    </div>
+                    <div id="active-orders-list" class="space-y-4"></div>
+                </section>
+
+                <section id="finalizado-view" class="view">
+                    <div class="text-center mb-8">
+                        <h2 class="text-3xl font-semibold">Meus Pedidos Finalizados</h2>
+                        <p class="mt-2 text-md text-stone-600 max-w-2xl mx-auto">Aqui estão todos os seus pedidos que já foram entregues.</p>
+                    </div>
+                    <div id="finalizado-orders-list" class="space-y-3"></div>
+                </section>
+
+                <section id="historico-view" class="view">
+                    <div class="text-center mb-8">
+                        <h2 class="text-3xl font-semibold">Histórico de Pedidos (Admin)</h2>
+                        <p class="mt-2 text-md text-stone-600 max-w-2xl mx-auto">Visão geral de todos os pedidos concluídos de todos os clientes.</p>
+                    </div>
+                    <div id="history-orders-list" class="space-y-3"></div>
+                </section>
+
+                <section id="gerenciar-view" class="view">
+                     <div class="flex justify-center items-center mb-8 bg-stone-300 p-1 rounded-lg shadow-inner text-sm sm:text-base flex-wrap gap-1">
+                        <button data-subview="user-management-subview" class="sub-nav-tab active flex-grow py-2 px-4 rounded-md font-semibold flex items-center justify-center gap-2">
+                            <span>Gerenciar Usuários</span>
+                        </button>
+                        <button data-subview="reports-subview" class="sub-nav-tab flex-grow py-2 px-4 rounded-md font-semibold flex items-center justify-center gap-2">
+                            <span>Relatórios</span>
+                        </button>
+                    </div>
+                    
+                    <div id="user-management-subview" class="subview active">
+                        <div class="text-center mb-8">
+                            <h2 class="text-3xl font-semibold">Gerenciar Usuários</h2>
+                            <p class="mt-2 text-md text-stone-600 max-w-2xl mx-auto">Altere as permissões de cada usuário do sistema.</p>
+                        </div>
+                        <div id="user-management-list" class="space-y-4"></div>
+                    </div>
+
+                    <div id="reports-subview" class="subview">
+                        <div class="text-center mb-8 flex justify-center items-center gap-4">
+                            <div>
+                                <h2 class="text-3xl font-semibold">Relatórios de Faturamento</h2>
+                                <p class="mt-2 text-md text-stone-600 max-w-2xl mx-auto">Análise de vendas e desempenho dos itens.</p>
+                            </div>
+                            <button id="download-reports-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Baixar (CSV)</button>
+                        </div>
+                        <div id="reports-content" class="space-y-8"></div>
+                    </div>
+                </section>
+            </main>
+            
+            <footer class="text-center mt-12 py-6 border-t border-stone-200">
+                <p class="text-stone-600 font-semibold text-xl">Bom Apetite!</p>
+            </footer>
+        </div>
+        
+        <button id="floating-menu-btn" class="fixed top-28 right-6 w-16 h-16 bg-amber-700 text-white rounded-full flex items-center justify-center shadow-lg text-3xl hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-600 z-40">
+            📖
+        </button>
+        <button id="floating-gerenciar-btn" class="fixed top-28 left-6 w-16 h-16 bg-amber-700 text-white rounded-full flex items-center justify-center shadow-lg text-3xl hover:bg-amber-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-600 z-40">
+            ⚙️
+        </button>
+        
+        <button id="logout-btn" class="fixed bottom-6 left-6 bg-red-700 text-white rounded-lg flex items-center justify-center shadow-lg hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-600 z-40 px-4 py-2" title="Sair da sua conta">
+             <span class="text-2xl mr-2">🚪</span>
+             <span>Sair</span>
+        </button>
+    </div>
+
+    <audio id="notification-sound" preload="auto">
+        <source src="data:audio/mp3;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWcgTm9pc2UgU291bmQgRWZmZWN0c1x0UlhXWEgAAADSAAADaW5mbwBQSVNNU1x0UlhXWEgAAADSAAADYWNjb3VudABiaWdub2lzZS5jb21cdFJUWFhYAAAAUQAAAyR0aXRsZQAxNjkgTm90aWZpY2F0aW9uIDYud2F2AFRYWFgAAADSAAADcmV2ZXJpYQBUWFhYAAAA0gAAAyRjb21tZW50AGRldmVsb3BlcnMud29ybGRwcmVzcy5jb21cdFJUWFhYAAAASAAAA3RpdGxlAE5vdGlmaWNhdGlvbiBTY29yZQBcaW5mbwBiaWdub2lzZS5jb21cdFJUWFhYAAAA0gAAA3JlcHVycG9zZWQAVFhYWAAAANgAAANhY2NvdW50AHRyYW5zY3JpYmVkIGZyb20gaHR0cDovL3NvdW5kYmlibGUuY29tL3NlYXJjaC5waHA/cXVlcnk9bm90aWZpY2F0aW9uXHRUWFRYWAAAACgAAAN0aXRsZQBTb3VuZCBUaXRsZTogQ29pbiBQdXJjaGFzZVx0SW5mbwBUWFhYAAAAgAAAA2NvbW1lbnQAaHR0cDovL3d3dy5zb3VuZGJpYmxlLmNvbS9wdWJsaWMtZG9tYWluLXNvdW5kcy1saXN0LTEuaHRtbFx0UmV2ZXJpYQBUWFhYAAAA4AAAA2NvbW1lbnQAU291bmQgVGl0bGU6IFJlY2VpdmUgTWVzc2FnZSAzXHRUWFRYWAAAACAAAAN0aXRsZQBTb3VuZCBUaXRsZTogQ29pbnNcU291bmQgVGl0bGU6IENvaW5zXHRUWFRYWAAAAEAAAAN0aXRsZQBQb3dlciBVcCBGb3JjZSA2XHRJbmZvAFRYWFgAAABQAAADY29tbWVudABUaGUgcG93ZXItdXAgYW5kIGl0ZW0gY29sbGVjdCBzb3VuZHMgZnJvbSBteSBnYW1lXHRUWFRYWAAAAEAAAAByZXZlcmlhAEFMRVJUAFRYWFgAAABQAAADcmV2ZXJpYQBEaXNjb3JkIE5vdGlmaWNhdGlvblx0aW5mbwBiaWdub2lzZS5jb21cdFJUWFhYAAAA0gAAAzBzb3VuZHMgb2YgY2hpbWVzLCBiZWxscywgZGlzY29yZCwgc2t5cGUsIHdoYXRzYXBwLCBhbmQgb3RoZXIgbWVzc2VuZ2Vycy5cdFJUWFhYAAAASAAAA3RpdGxlAE5vdGlmaWNhdGlvbiBTY29yZQBcaW5mbwBiaWdub2lzZS5jb21cdFJUWFhYAAAA0gAAA3JlcHVycG9zZWQAVFhYWAAAANgAAANhY2NvdW50AHRyYW5zY3JpYmVkIGZyb20gaHR0cDovL3NvdW5kYmlibGUuY29tL3NlYXJjaC5waHA/cXVlcnk9bm90aWZpY2F0aW9uXHRUWFRYWAAAACgAAAN0aXRsZQBTb3VuZCBUaXRsZTogQ29pbiBQdXJjaGFzZVx0SW5mbwBUWFhYAAAAgAAAA2NvbW1lbnQAaHR0cDovL3d3dy5zb3VuZGJpYmxlLmNvbS9wdWJsaWMtZG9tYWluLXNvdW5kcy1saXN0LTEuaHRtbFx0UmV2ZXJpYQBUWFhYAAAA4AAAA2NvbW1lbnQAU291bmQgVGl0bGU6IFJlY2VpdmUgTWVzc2FnZSAzXHRUWFRYWAAAACAAAAN0aXRsZQBQb3dlciBVcCBGb3JjZSA2XHRJbmZvAFRYWFgAAABQAAADY29tbWVudABUaGUgcG93ZXItdXAgYW5kIGl0ZW0gY29sbGVjdCBzb3VuZHMgZnJvbSBteSBnYW1lXHRUWFRYWAAAAEAAAAByZXZlcmlhAEFMRVJUAFRYWFgAAABQAAADcmV2ZXJpYQBEaXNjb3JkIE5vdGlmaWNhdGlvblx0aW5mbwBiaWdub2lzZS5jb21cdFJUWFhYAAAA0gAAAzBzb3VuZHMgb2YgY2hpbWVzLCBiZWxscywgZGlzY29yZCwgc2t5cGUsIHdoYXRzYXBwLCBhbmQgb3RoZXIgbWVzc2VuZ2Vycy5cdFJUWFhYAAAAWAAAA3RpdGxlAFBvcCBVcCBXaW5kb3cgQW5pbWF0aW9uXHRJbmZvAEFwcGxlXHRUWFRYWAAAAIgAAANjb21tZW50AG11c2ljYm94d2l0aHBldHR5Y29sb3JlZGRvb3JzLmNvbVx0UmV2ZXJpYQBBiXRzYW1iYS5wcm9qZWN0LmNvbVx0UlhYWAAAANAiVJGBAAAAAAAAAD/AAAAAAAAAAAAAAAABJSU0cgAAAARgAAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV-mail.com/send -H 'content-type: application/json' -d '{"from":"noreply@barreto.com","to":"manager@barreto.com","subject":"New Order","text":"A new order has been placed."}'
+    </audio>
+    <script>
+        console.log('%c--- SCRIPT INICIADO ---', 'color: #c2410c; font-weight: bold; font-size: 16px;');
+        
+        // --- SHARED VARIABLES & UTILS ---
+        const toastContainer = document.getElementById('toast-container');
+        let isMasterRoleUnlocked = false; // Session-based lock state
+
+        function showToast(message, type = 'success') {
+            console.log(`[TOAST] Exibindo: "${message}" (Tipo: ${type})`);
+            const toast = document.createElement('div');
+            toast.className = 'toast text-white py-2 px-5 rounded-lg shadow-lg';
+            let bgColor = 'bg-green-600';
+            if (type === 'error') bgColor = 'bg-red-600';
+            if (type === 'info') bgColor = 'bg-blue-600';
+            if (type === 'warning') bgColor = 'bg-yellow-500';
+            toast.classList.add(bgColor);
+            toast.textContent = message;
+            
+            toastContainer.appendChild(toast);
+            
+            setTimeout(() => toast.classList.add('show'), 10);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                toast.addEventListener('transitionend', () => toast.remove());
+            }, 4000);
+        }
+
+        const formatCPF = (cpf) => {
+            cpf = cpf.replace(/\D/g, '');
+            cpf = cpf.replace(/(\d{3})(\d)/, '$1.$2');
+            cpf = cpf.replace(/(\d{3})(\d)/, '$1.$2');
+            cpf = cpf.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+            return cpf;
+        };
+
+        const readFileAsDataURL = (file) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        };
+
+        // --- AUTH LOGIC ---
+        function setupAuth() {
+            console.groupCollapsed('[AUTH] Configurando Autenticação');
+            const authSection = document.getElementById('auth-section');
+            const appContainer = document.getElementById('app-section');
+            const loginView = document.getElementById('login-view');
+            const registerView = document.getElementById('register-view');
+            const resetPasswordView = document.getElementById('reset-password-view');
+            const showRegisterLink = document.getElementById('show-register-link');
+            const showLoginLink = document.getElementById('show-login-link');
+            const backToLoginLink = document.getElementById('back-to-login-link');
+            const forgotPasswordLink = document.getElementById('forgot-password-link');
+            const loginForm = document.getElementById('login-form');
+            const registerForm = document.getElementById('register-form');
+            const resetPasswordForm = document.getElementById('reset-password-form');
+            const loginCpfInput = document.getElementById('login-cpf');
+            const registerCpfInput = document.getElementById('register-cpf');
+            const logoutBtn = document.getElementById('logout-btn');
+            const forgotPasswordModal = document.getElementById('forgot-password-modal');
+            const forgotPasswordForm = document.getElementById('forgot-password-form');
+            const cancelForgotBtn = document.getElementById('cancel-forgot-btn');
+            const forgotCpfInput = document.getElementById('forgot-cpf');
+            const rememberMeCheckbox = document.getElementById('remember-me');
+
+            // Pre-seed users for testing roles
+            const seedUsers = () => {
+                let users = JSON.parse(localStorage.getItem('espetaria_users') || '[]');
+                const specialUsers = [
+                    { name: 'André Filipe Albuquerque Silva', cpf: '078.590.793-99', password: '07859079399', role: 'master' },
+                    { name: 'Antônio Barreto', cpf: '707.474.234-15', password: 'barreto123', role: 'gerente' }
+                ];
+
+                specialUsers.forEach(specialUser => {
+                    const userIndex = users.findIndex(u => u.cpf === specialUser.cpf);
+                    if (userIndex === -1) {
+                        users.push(specialUser);
+                    } else {
+                        // Ensure existing special users have the correct role and data, in case it was changed
+                        users[userIndex] = { ...users[userIndex], ...specialUser };
+                    }
+                });
+
+                localStorage.setItem('espetaria_users', JSON.stringify(users));
+                console.log('[AUTH] Usuários especiais verificados e semeados.');
+            };
+            seedUsers();
+
+
+            const showApp = () => {
+                console.log('[AUTH] Exibindo a aplicação principal.');
+                document.body.classList.remove('bg-amber-950');
+                document.body.classList.add('bg-stone-100');
+                authSection.classList.remove('active');
+                appContainer.classList.add('active');
+                initializeApp();
+            };
+            
+            const showAuth = () => {
+                console.log('[AUTH] Exibindo a tela de autenticação.');
+                isMasterRoleUnlocked = false; // Reset lock on logout
+                document.body.classList.add('bg-amber-950');
+                document.body.classList.remove('bg-stone-100');
+                authSection.classList.add('active');
+                appContainer.classList.remove('active');
+                loginForm.reset(); // Clear form on logout
+            };
+
+            logoutBtn.addEventListener('click', () => {
+                console.log('[AUTH] Usuário fez logout.');
+                localStorage.removeItem('currentUser');
+                sessionStorage.removeItem('currentUser');
+                location.reload();
+            });
+
+            const handleCpfInput = (e) => e.target.value = formatCPF(e.target.value);
+            loginCpfInput.addEventListener('input', handleCpfInput);
+            registerCpfInput.addEventListener('input', handleCpfInput);
+            forgotCpfInput.addEventListener('input', handleCpfInput);
+
+            const switchToAuthView = (viewToShow) => {
+                [loginView, registerView, resetPasswordView].forEach(view => {
+                    view.classList.toggle('active', view === viewToShow);
+                });
+            };
+
+            showRegisterLink.addEventListener('click', (e) => { e.preventDefault(); switchToAuthView(registerView); });
+            showLoginLink.addEventListener('click', (e) => { e.preventDefault(); switchToAuthView(loginView); });
+            backToLoginLink.addEventListener('click', (e) => { e.preventDefault(); switchToAuthView(loginView); });
+            
+            forgotPasswordLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                forgotPasswordModal.classList.add('visible');
+            });
+
+            cancelForgotBtn.addEventListener('click', () => {
+                forgotPasswordModal.classList.remove('visible');
+                forgotPasswordForm.reset();
+            });
+
+            forgotPasswordForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const cpf = forgotCpfInput.value;
+                 if (cpf.length !== 14) {
+                    showToast('Por favor, digite um CPF válido.', 'error');
+                    return;
+                }
+                let users = JSON.parse(localStorage.getItem('espetaria_users') || '[]');
+                const userIndex = users.findIndex(u => u.cpf === cpf);
+
+                if (userIndex === -1) {
+                    showToast('CPF não encontrado no sistema.', 'error');
+                    return;
+                }
+
+                users[userIndex].passwordResetRequested = true;
+                localStorage.setItem('espetaria_users', JSON.stringify(users));
+                showToast('Solicitação enviada! O administrador irá aprovar sua redefinição.', 'info');
+                forgotPasswordModal.classList.remove('visible');
+                forgotPasswordForm.reset();
+            });
+
+
+            document.querySelectorAll('.password-toggle').forEach(toggle => {
+                toggle.addEventListener('click', () => {
+                    const passwordInput = toggle.previousElementSibling;
+                    if (passwordInput) {
+                        const isPassword = passwordInput.type === 'password';
+                        passwordInput.type = isPassword ? 'text' : 'password';
+                        toggle.textContent = isPassword ? '🙈' : '👁️';
+                    }
+                });
+            });
+
+            function setupPasswordLengthWarning(inputElement) {
+                const container = inputElement.closest('.relative').parentElement;
+                const errorElement = container.querySelector('.password-length-error');
+                if (errorElement) {
+                    inputElement.addEventListener('input', () => {
+                        if (inputElement.value.length > 11) {
+                            inputElement.value = inputElement.value.slice(0, 11);
+                            errorElement.style.display = 'block';
+                            setTimeout(() => {
+                                errorElement.style.display = 'none';
+                            }, 2000);
+                        }
+                    });
+                }
+            }
+            document.querySelectorAll('input[type="password"]').forEach(setupPasswordLengthWarning);
+
+
+            registerForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                console.log('[AUTH] Tentativa de cadastro.');
+                const name = document.getElementById('register-name').value;
+                const cpf = registerCpfInput.value;
+                const password = document.getElementById('register-password').value.trim();
+
+                if (cpf.length !== 14) {
+                    console.error('[AUTH] Erro de cadastro: CPF inválido.');
+                    showToast('CPF inválido. Por favor, preencha corretamente.', 'error');
+                    return;
+                }
+                if (!password || password.length > 11) {
+                    showToast('A senha deve ter até 11 caracteres.', 'error');
+                    return;
+                }
+
+                const users = JSON.parse(localStorage.getItem('espetaria_users') || '[]');
+                if (users.some(user => user.cpf === cpf)) {
+                    console.error('[AUTH] Erro de cadastro: CPF já existe.');
+                    showToast('Este CPF já está cadastrado. Tente outro.', 'error');
+                    return;
+                }
+                
+                const newUser = { name, cpf, password, role: 'comum' }; // Default role
+                users.push(newUser);
+                localStorage.setItem('espetaria_users', JSON.stringify(users));
+                console.log('[AUTH] Cadastro realizado com sucesso para:', newUser);
+                showToast('Cadastro realizado com sucesso!', 'success');
+                registerForm.reset();
+                switchToAuthView(loginView);
+            });
+
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const cpf = loginCpfInput.value;
+                const password = document.getElementById('login-password').value;
+                const rememberMe = rememberMeCheckbox.checked;
+                console.log(`[AUTH] Tentativa de login para o CPF: ${cpf}`);
+                
+                if (cpf.length !== 14) {
+                    console.error('[AUTH] Erro de login: CPF inválido.');
+                    showToast('CPF inválido.', 'error');
+                    return;
+                }
+
+                const users = JSON.parse(localStorage.getItem('espetaria_users') || '[]');
+                const user = users.find(u => u.cpf === cpf);
+
+                if (user && user.password === password) {
+                    const storage = rememberMe ? localStorage : sessionStorage;
+                    if (user.passwordResetAllowed) {
+                        console.log(`[AUTH] Usuário ${cpf} precisa redefinir a senha.`);
+                        showToast('Por favor, crie uma nova senha.', 'info');
+                        document.getElementById('reset-cpf').value = cpf;
+                        switchToAuthView(resetPasswordView);
+                    } else {
+                        console.log(`[AUTH] Login bem-sucedido para: ${user.name} com a função: ${user.role || 'comum'}`);
+                        showToast(`Bem-vindo, ${user.name.split(' ')[0]}!`, 'success');
+                        storage.setItem('currentUser', JSON.stringify(user));
+                        setTimeout(showApp, 500);
+                    }
+                } else {
+                    console.error('[AUTH] Erro de login: CPF ou senha incorretos.');
+                    showToast('CPF ou senha incorretos.', 'error');
+                }
+            });
+
+            resetPasswordForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const cpf = document.getElementById('reset-cpf').value;
+                const newPassword = document.getElementById('reset-new-password').value;
+                const confirmPassword = document.getElementById('reset-confirm-password').value;
+
+                if (!newPassword || newPassword.length > 11) {
+                    showToast('A nova senha deve ter até 11 caracteres.', 'error');
+                    return;
+                }
+                if (newPassword !== confirmPassword) {
+                    showToast('As senhas não coincidem.', 'error');
+                    return;
+                }
+
+                let users = JSON.parse(localStorage.getItem('espetaria_users') || '[]');
+                const userIndex = users.findIndex(u => u.cpf === cpf);
+                if (userIndex !== -1) {
+                    users[userIndex].password = newPassword;
+                    delete users[userIndex].passwordResetAllowed; // Flag is removed
+                    localStorage.setItem('espetaria_users', JSON.stringify(users));
+                    showToast('Senha redefinida com sucesso! Faça login com sua nova senha.', 'success');
+                    resetPasswordForm.reset();
+                    switchToAuthView(loginView);
+                    loginCpfInput.value = cpf;
+                }
+            });
+
+            const loggedInUser = localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser');
+            if (loggedInUser) {
+                console.log('[AUTH] Usuário já logado encontrado. Iniciando app.');
+                showApp();
+            } else {
+                console.log('[AUTH] Nenhum usuário logado. Exibindo tela de auth.');
+                showAuth();
+            }
+            console.groupEnd();
+        }
+
+        // --- APP LOGIC ---
+        const espetosData = [
+            { id: 'lingua', name: 'Lingua', suggestions: [ "Surpreenda-se com a nossa língua bovina, cozida lentamente até ficar incrivelmente macia. Temperada com ervas finas, cada pedaço derrete na boca. Uma iguaria para paladares ousados!", "Descubra o sabor único da nossa língua ao molho madeira. Textura aveludada e um tempero que realça cada fibra. É a escolha perfeita para quem busca uma experiência gastronômica autêntica." ] },
+            { id: 'panceta', name: 'Panceta', suggestions: [ "Crocrância por fora, suculência por dentro! Nossa panceta é pururucada à perfeição, com uma camada de carne macia e um tempero que equilibra sal e especiarias. Impossível comer uma só!", "Prepare-se para a panceta dos seus sonhos. Marinada em cachaça e limão, assada lentamente para uma textura perfeita. Cada mordida é um espetáculo de sabor e crocância." ] },
+            { id: 'frango', name: 'Frango', suggestions: [ "Nosso espeto de frango é a definição de suculência. Pedaços de sobrecoxa marinados em laranja e ervas, grelhados até dourar. Leve, saboroso e irresistivelmente delicioso.", "Um clássico que nunca falha! Peito de frango macio, entrelaçado com pimentões e cebola, e coberto por um molho de alho especial. A combinação perfeita de frescor e sabor." ] },
+            { id: 'alcatra', name: 'Alcatra', suggestions: [ "A rainha dos espetos! Pedaços generosos de alcatra, selados no fogo alto para manter toda a suculência. Um sabor robusto de carne nobre, com o toque especial do sal grosso.", "Experimente a maciez da nossa alcatra premium. Cada cubo é cuidadosamente selecionado e temperado para realçar o sabor natural da carne. Um clássico executado com perfeição." ] },
+            { id: 'costela', name: 'Costela Suína', suggestions: [ "Desmanchando no palito! Nossa costela suína é assada por horas e finalizada com um delicioso molho barbecue artesanal. Agridoce, defumada e simplesmente inesquecível.", "Uma explosão de sabor! Costela de porco marinada em especiarias e assada até a carne soltar do osso. Suculenta e cheia de personalidade para quem ama carne suína." ] }
+        ];
+        const prices = { simples: 13.00, completo: 15.00 };
+        let clientId = '';
+        let clientFirstName = '';
+        let userRole = 'comum'; // Default role
+        let cartItems = [];
+        let activeOrders = [];
+        let orderHistory = [];
+        let lastKnownOrderIds = new Set(); // Global variable to track order IDs
+        const espetosGrid = document.getElementById('espetos-grid');
+        const cartContent = document.getElementById('cart-content');
+        const activeOrdersList = document.getElementById('active-orders-list');
+        const finalizadoOrdersList = document.getElementById('finalizado-orders-list');
+        const historyOrdersList = document.getElementById('history-orders-list');
+        const userManagementList = document.getElementById('user-management-list');
+        const cartBadge = document.getElementById('cart-badge');
+        const paymentModal = document.getElementById('payment-modal');
+        const floatingMenuBtn = document.getElementById('floating-menu-btn');
+        const floatingGerenciarBtn = document.getElementById('floating-gerenciar-btn');
+        const suggestionModal = document.getElementById('suggestion-modal');
+
+        function getTodayDateStringApp() {
+            const today = new Date();
+            return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        }
+
+        function dailyCleanupApp() {
+            const lastVisitDate = localStorage.getItem('lastVisitDate');
+            const todayDate = getTodayDateStringApp();
+            if (lastVisitDate !== todayDate) {
+                console.warn(`[APP] Limpeza diária executada. Data antiga: ${lastVisitDate}, Data nova: ${todayDate}. Pedidos ativos e carrinho foram limpos.`);
+                localStorage.setItem('activeOrders', '[]');
+                localStorage.setItem('cartItems', '[]');
+                localStorage.setItem('lastVisitDate', todayDate);
+            } else {
+                console.log("[APP] Limpeza diária não necessária.");
+            }
+        }
+
+        function applyRolePermissions(role) {
+            console.log(`[PERMISSIONS] Aplicando permissões para a função: ${role}`);
+            const finalizadoTab = document.querySelector('[data-view="finalizado-view"]');
+            const historicoTab = document.querySelector('[data-view="historico-view"]');
+            const gerenciarTab = document.querySelector('[data-view="gerenciar-view"]');
+            
+            // Reset all to visible, then hide based on role
+            finalizadoTab.style.display = 'flex';
+            historicoTab.style.display = 'flex';
+            gerenciarTab.style.display = 'flex';
+            floatingGerenciarBtn.classList.remove('visible');
+
+            if (role === 'master') {
+                 floatingGerenciarBtn.classList.add('visible');
+            } else if (role === 'gerente') {
+                finalizadoTab.style.display = 'none';
+                gerenciarTab.style.display = 'none';
+            } else if (role === 'comum') {
+                historicoTab.style.display = 'none';
+                gerenciarTab.style.display = 'none';
+            }
+        }
+
+        function initializeApp() {
+            console.group('[APP] Inicializando a Aplicação');
+            dailyCleanupApp();
+            const currentUserJSON = localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser');
+            const currentUser = JSON.parse(currentUserJSON);
+            clientId = currentUser ? currentUser.cpf : 'dev-user';
+            clientFirstName = currentUser ? currentUser.name.split(' ')[0] : 'Developer';
+            userRole = currentUser ? currentUser.role : 'comum';
+            
+            console.log(`[APP] Usuário definido: ${clientFirstName} (CPF: ${clientId}, Função: ${userRole})`);
+            
+            applyRolePermissions(userRole);
+
+            try {
+                cartItems = JSON.parse(localStorage.getItem('cartItems') || '[]');
+                activeOrders = JSON.parse(localStorage.getItem('activeOrders') || '[]');
+                orderHistory = JSON.parse(localStorage.getItem('orderHistory') || '[]');
+                console.log('[APP] Dados carregados do localStorage:', { cartItems, activeOrders, orderHistory });
+            } catch (error) {
+                console.error('[APP] Erro ao carregar dados do localStorage:', error);
+                cartItems = [];
+                activeOrders = [];
+                orderHistory = [];
+            }
+
+            renderAllApp();
+            setupNavApp();
+            setupHistoryAccordionApp();
+            setupPaymentModalListenersApp();
+            setupFloatingButtonsApp();
+            setupSuggestionModalApp();
+            setupProofModalApp();
+            setupUserManagementListeners();
+            setupUnlockModalApp();
+            setupChangePasswordModalApp();
+            setupDeleteConfirmModal();
+            setupForceResetModal();
+            setupDownloadButtons();
+            setupGerenciarViewTabs();
+            setupClearCartModal();
+            setupCashConfirmModal();
+            setupCompleteOrderModal();
+            setupOrderNotifications();
+            console.groupEnd();
+        }
+        
+        function renderAllApp() {
+            console.log('[RENDER] Renderizando todos os componentes.');
+            renderMenuCardsApp();
+            renderCartApp();
+            renderActiveOrdersApp();
+            renderFinishedOrdersApp();
+            renderOrderHistoryApp();
+            renderUserManagement();
+            renderReports();
+        }
+
+        function playNotificationSound() {
+            const sound = document.getElementById('notification-sound');
+            const promise = sound.play();
+            if (promise !== undefined) {
+                promise.catch(error => {
+                    console.warn("[AUDIO] Autoplay foi bloqueado pelo navegador. O som tocará no próximo clique.", error);
+                    document.body.addEventListener('click', () => sound.play(), { once: true });
+                });
+            }
+        }
+
+        function setupOrderNotifications() {
+            if (userRole === 'master' || userRole === 'gerente') {
+                console.log('[NOTIFY] Configurando notificações de pedidos para o admin.');
+                // Set initial state
+                try {
+                     const initialOrders = JSON.parse(localStorage.getItem('activeOrders') || '[]');
+                     lastKnownOrderIds = new Set(initialOrders.map(o => o.id));
+                } catch(e) {
+                     lastKnownOrderIds = new Set();
+                }
+
+                setInterval(() => {
+                    try {
+                        const currentOrders = JSON.parse(localStorage.getItem('activeOrders') || '[]');
+                        const currentOrderIds = new Set(currentOrders.map(o => o.id));
+
+                        let newOrderFound = false;
+                        for (const id of currentOrderIds) {
+                            if (!lastKnownOrderIds.has(id)) {
+                                newOrderFound = true;
+                                break;
+                            }
+                        }
+
+                        if (newOrderFound) {
+                            console.log('[NOTIFY] Novo pedido detectado!');
+                            playNotificationSound();
+                            renderActiveOrdersApp(); // Re-render the list to show the new order
+                        }
+                        
+                        lastKnownOrderIds = currentOrderIds;
+
+                    } catch(e) {
+                        console.error("[NOTIFY] Erro ao verificar pedidos:", e);
+                    }
+                }, 5000); // Check every 5 seconds
+            }
+        }
+
+        async function setupPaymentModalListenersApp() {
+            const cancelPaymentBtn = document.getElementById('cancel-payment-btn');
+            const payCashBtn = document.getElementById('pay-cash-btn');
+            const payPixBtn = document.getElementById('pay-pix-btn');
+            const backToPaymentSelectionBtn = document.getElementById('back-to-payment-selection-btn');
+            const copyPixKeyBtn = document.getElementById('copy-pix-key-btn');
+            const pixProofInput = document.getElementById('pix-proof-input');
+            const confirmPixPaymentBtn = document.getElementById('confirm-pix-payment-btn');
+            
+            cancelPaymentBtn.addEventListener('click', () => {
+                console.log('[MODAL] Pagamento cancelado.');
+                paymentModal.classList.remove('visible');
+            });
+            payCashBtn.addEventListener('click', () => {
+                document.getElementById('cash-confirm-modal').classList.add('visible');
+            });
+            payPixBtn.addEventListener('click', () => {
+                console.log('[MODAL] Método de pagamento selecionado: Pix. Exibindo detalhes.');
+                document.getElementById('payment-selection-view').classList.remove('active');
+                document.getElementById('pix-details-view').classList.add('active');
+            });
+            backToPaymentSelectionBtn.addEventListener('click', () => {
+                console.log('[MODAL] Voltando para a seleção de pagamento.');
+                document.getElementById('pix-details-view').classList.remove('active');
+                document.getElementById('payment-selection-view').classList.add('active');
+            });
+            copyPixKeyBtn.addEventListener('click', () => {
+                const pixKey = document.getElementById('pix-key').innerText;
+                const textArea = document.createElement('textarea');
+                textArea.value = pixKey;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    console.log('[MODAL] Chave Pix copiada com sucesso.');
+                    showToast('Chave Pix copiada!', 'success');
+                } catch (err) {
+                    console.error('[MODAL] Erro ao copiar a chave Pix:', err);
+                    showToast('Erro ao copiar a chave.', 'warning');
+                }
+                document.body.removeChild(textArea);
+            });
+            pixProofInput.addEventListener('change', () => {
+                if (pixProofInput.files.length > 0) {
+                    console.log('[MODAL] Comprovante Pix anexado:', pixProofInput.files[0].name);
+                    confirmPixPaymentBtn.disabled = false;
+                    document.getElementById('file-name-display').textContent = `Arquivo: ${pixProofInput.files[0].name}`;
+                } else {
+                    confirmPixPaymentBtn.disabled = true;
+                    document.getElementById('file-name-display').textContent = '';
+                }
+            });
+            confirmPixPaymentBtn.addEventListener('click', async () => {
+                console.log('[MODAL] Pagamento com Pix (comprovante) confirmado.');
+                const file = pixProofInput.files[0];
+                let proofData = null;
+                if (file) {
+                    try {
+                        proofData = {
+                            fileData: await readFileAsDataURL(file),
+                            fileName: file.name,
+                            fileType: file.type
+                        };
+                        console.log('[MODAL] Arquivo de comprovante lido com sucesso.');
+                    } catch (error) {
+                        console.error('[MODAL] Erro ao ler arquivo de comprovante:', error);
+                        showToast('Erro ao processar o comprovante.', 'error');
+                        return;
+                    }
+                }
+                confirmAndSendOrderApp('Pix (Comprovante Anexado)', proofData);
+                paymentModal.classList.remove('visible');
+                // Reset PIX form
+                pixProofInput.value = '';
+                confirmPixPaymentBtn.disabled = true;
+                document.getElementById('file-name-display').textContent = '';
+                document.getElementById('pix-details-view').classList.remove('active');
+                document.getElementById('payment-selection-view').classList.add('active');
+            });
+        }
+
+        function setupFloatingButtonsApp() {
+            floatingMenuBtn.addEventListener('click', () => {
+                console.log('[UI] Botão flutuante de cardápio clicado.');
+                switchToViewApp('cardapio-view');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+             floatingGerenciarBtn.addEventListener('click', () => {
+                console.log('[UI] Botão flutuante de gerenciar clicado.');
+                switchToViewApp('gerenciar-view');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        }
+
+        function updateFloatingButtonVisibilityApp() {
+            const cardapioViewIsActive = document.getElementById('cardapio-view').classList.contains('active');
+            
+            // Floating Menu Button
+            if (!cardapioViewIsActive) {
+                floatingMenuBtn.classList.add('visible');
+            } else {
+                floatingMenuBtn.classList.remove('visible');
+            }
+
+            // Floating Gerenciar Button
+            const gerenciarViewIsActive = document.getElementById('gerenciar-view').classList.contains('active');
+            if (userRole === 'master' && !gerenciarViewIsActive) {
+                floatingGerenciarBtn.classList.add('visible');
+            } else {
+                floatingGerenciarBtn.classList.remove('visible');
+            }
+        }
+        
+        function setupSuggestionModalApp() {
+            const chefSuggestionBtn = document.getElementById('chef-suggestion-btn');
+            const closeSuggestionBtn = document.getElementById('close-suggestion-btn');
+            const suggestionContent = document.getElementById('suggestion-content');
+            
+            chefSuggestionBtn.addEventListener('click', () => {
+                console.log('[SUGGESTION] Botão "Sugestão do Chef" clicado.');
+                suggestionModal.classList.add('visible');
+                
+                const randomSkewer = espetosData[Math.floor(Math.random() * espetosData.length)];
+                const randomSuggestion = randomSkewer.suggestions[Math.floor(Math.random() * randomSkewer.suggestions.length)];
+
+                suggestionContent.innerHTML = `<h4 class="text-xl font-semibold text-stone-800 mb-3">Espeto de ${randomSkewer.name}</h4><p class="text-stone-600">${randomSuggestion}</p>`;
+            });
+            
+            closeSuggestionBtn.addEventListener('click', () => {
+                console.log('[SUGGESTION] Modal de sugestão fechado.');
+                suggestionModal.classList.remove('visible');
+            });
+        }
+
+        function setupProofModalApp() {
+            const proofModal = document.getElementById('proof-modal');
+            const closeBtn = document.getElementById('close-proof-modal-btn');
+            const proofContent = document.getElementById('proof-content');
+            closeBtn.addEventListener('click', () => {
+                proofModal.classList.remove('visible');
+                proofContent.innerHTML = ''; // Limpa o conteúdo
+            });
+        }
+
+        function setupUnlockModalApp() {
+            const unlockModal = document.getElementById('unlock-modal');
+            const unlockForm = document.getElementById('unlock-form');
+            const cancelUnlockBtn = document.getElementById('cancel-unlock-btn');
+            const unlockPasswordInput = document.getElementById('unlock-password');
+            const unlockTitle = document.getElementById('unlock-title');
+            const submitUnlockBtn = document.getElementById('submit-unlock-btn');
+
+            cancelUnlockBtn.addEventListener('click', () => {
+                unlockModal.classList.remove('visible');
+                unlockForm.reset();
+            });
+
+            unlockForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (unlockPasswordInput.value === 'Br@sil500') {
+                    const action = unlockForm.dataset.actionToPerform;
+                    if (action === 'unlock') {
+                        isMasterRoleUnlocked = true;
+                        showToast('Acesso Master desbloqueado para esta sessão.', 'success');
+                    } else if (action === 'lock') {
+                        isMasterRoleUnlocked = false;
+                        showToast('Acesso Master bloqueado.', 'info');
+                    }
+                    unlockModal.classList.remove('visible');
+                    unlockForm.reset();
+                    renderUserManagement();
+                } else {
+                    showToast('Senha incorreta.', 'error');
+                }
+            });
+        }
+
+        function setupChangePasswordModalApp() {
+            const modal = document.getElementById('change-password-modal');
+            const form = document.getElementById('change-password-form');
+            const cancelBtn = document.getElementById('cancel-change-password-btn');
+            const userInfo = document.getElementById('change-password-user-info');
+            const newPasswordInput = document.getElementById('new-password');
+            const confirmPasswordInput = document.getElementById('confirm-new-password');
+            
+            cancelBtn.addEventListener('click', () => {
+                modal.classList.remove('visible');
+                form.reset();
+            });
+
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const newPassword = newPasswordInput.value;
+                const confirmPassword = confirmPasswordInput.value;
+                const cpf = form.dataset.cpf;
+
+                if (!newPassword || newPassword.length > 11) {
+                    showToast('A nova senha deve ter até 11 caracteres.', 'error');
+                    return;
+                }
+                if (newPassword !== confirmPassword) {
+                    showToast('As senhas não coincidem.', 'error');
+                    return;
+                }
+
+                updateUserPassword(cpf, newPassword);
+                modal.classList.remove('visible');
+                form.reset();
+            });
+        }
+
+        function setupDeleteConfirmModal() {
+            const modal = document.getElementById('delete-confirm-modal');
+            const cancelBtn = document.getElementById('cancel-delete-btn');
+            const confirmBtn = document.getElementById('confirm-delete-btn');
+
+            cancelBtn.addEventListener('click', () => {
+                modal.classList.remove('visible');
+            });
+
+            confirmBtn.addEventListener('click', () => {
+                const cpf = confirmBtn.dataset.cpf;
+                deleteUser(cpf);
+                modal.classList.remove('visible');
+            });
+        }
+
+        function setupForceResetModal() {
+            const modal = document.getElementById('force-reset-confirm-modal');
+            const confirmBtn = document.getElementById('confirm-force-reset-btn');
+            const cancelBtn = document.getElementById('cancel-force-reset-btn');
+            const closeBtn = document.getElementById('close-force-reset-modal-btn');
+
+            const closeModal = () => {
+                modal.classList.remove('visible');
+            };
+
+            const handleResetChoice = (forceChange) => {
+                const cpf = modal.dataset.cpf;
+                let users = JSON.parse(localStorage.getItem('espetaria_users') || '[]');
+                const userIndex = users.findIndex(u => u.cpf === cpf);
+
+                if (userIndex !== -1) {
+                    users[userIndex].passwordResetAllowed = forceChange;
+                    localStorage.setItem('espetaria_users', JSON.stringify(users));
+                    const message = forceChange ? 'Usuário deverá trocar a senha no próximo login.' : 'Usuário pode usar a senha padrão.';
+                    showToast(`Senha redefinida! ${message}`, 'success');
+                }
+                closeModal();
+                renderUserManagement();
+            };
+
+            confirmBtn.addEventListener('click', () => handleResetChoice(true));
+            cancelBtn.addEventListener('click', () => handleResetChoice(false));
+            closeBtn.addEventListener('click', closeModal);
+        }
+
+        function switchToViewApp(viewId) {
+            console.log(`[UI] Trocando para a view: ${viewId}`);
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.querySelector(`[data-view="${viewId}"]`).classList.add('active');
+            document.getElementById(viewId).classList.add('active');
+            updateFloatingButtonVisibilityApp();
+            updateDynamicCartButton();
+        }
+
+        function setupNavApp() {
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.addEventListener('click', () => switchToViewApp(tab.dataset.view));
+            });
+        }
+
+        function renderMenuCardsApp() {
+            espetosGrid.innerHTML = '';
+            espetosData.forEach(skewer => {
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-xl shadow-lg p-5 flex flex-col justify-between';
+                card.innerHTML = `
+                    <div><h3 class="font-bold text-2xl text-amber-800 mb-4 text-center">${skewer.name}</h3></div>
+                    <div class="flex flex-col space-y-3 mt-4">
+                        <button onclick="addToCartApp('${skewer.id}', 'simples')" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Adicionar Simples (R$ ${prices.simples.toFixed(2)})</button>
+                        <button onclick="addToCartApp('${skewer.id}', 'completo')" class="w-full bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-4 rounded-lg transition-colors">Adicionar Completo (R$ ${prices.completo.toFixed(2)})</button>
+                    </div>`;
+                espetosGrid.appendChild(card);
+            });
+        }
+
+        function addToCartApp(skewerId, type) {
+            const skewer = espetosData.find(s => s.id === skewerId);
+            const cartItemId = `${skewerId}-${type}`;
+            const existingItem = cartItems.find(item => item.id === cartItemId);
+            if (existingItem) {
+                existingItem.quantity++;
+            } else {
+                cartItems.push({ id: cartItemId, skewerId: skewer.id, skewerName: skewer.name, type: type, price: prices[type], quantity: 1 });
+            }
+            console.log(`[CART] Adicionado ao carrinho: ${skewer.name} (${type}). Estado atual do carrinho:`, cartItems);
+            localStorage.setItem('cartItems', JSON.stringify(cartItems));
+            renderCartApp();
+            showToast(`"${skewer.name} (${type})" adicionado!`, 'success');
+        }
+
+        function changeQuantityApp(cartItemId, amount) {
+            const itemIndex = cartItems.findIndex(item => item.id === cartItemId);
+            if (itemIndex > -1) {
+                cartItems[itemIndex].quantity += amount;
+                if (cartItems[itemIndex].quantity <= 0) {
+                    console.log(`[CART] Removido do carrinho: ${cartItems[itemIndex].skewerName}`);
+                    cartItems.splice(itemIndex, 1);
+                }
+                console.log(`[CART] Quantidade alterada para o item ${cartItemId}. Novo estado do carrinho:`, cartItems);
+                localStorage.setItem('cartItems', JSON.stringify(cartItems));
+                renderCartApp();
+            }
+        }
+        
+        function updateCartItemTypeApp(oldItemId) {
+            const itemIndex = cartItems.findIndex(item => item.id === oldItemId);
+            if (itemIndex === -1) return;
+            
+            const originalItem = cartItems[itemIndex];
+            const { quantity, skewerId } = originalItem;
+            const newType = originalItem.type === 'simples' ? 'completo' : 'simples';
+
+            console.log(`[CART] Trocando tipo do item ${oldItemId} de '${originalItem.type}' para '${newType}'.`);
+
+            cartItems.splice(itemIndex, 1);
+            const newItemId = `${skewerId}-${newType}`;
+            
+            const existingNewItem = cartItems.find(item => item.id === newItemId);
+            if (existingNewItem) {
+                existingNewItem.quantity += quantity;
+            } else {
+                const skewer = espetosData.find(s => s.id === skewerId);
+                cartItems.push({ id: newItemId, skewerId: skewer.id, skewerName: skewer.name, type: newType, price: prices[newType], quantity: quantity });
+            }
+            
+            console.log('[CART] Carrinho atualizado após troca de tipo:', cartItems);
+            localStorage.setItem('cartItems', JSON.stringify(cartItems));
+            renderCartApp();
+        }
+
+        function updateCartItemSkewerApp(oldItemId, newSkewerId) {
+            const itemIndex = cartItems.findIndex(item => item.id === oldItemId);
+            if (itemIndex === -1) return;
+
+            const originalItem = cartItems[itemIndex];
+            const { quantity, type } = originalItem;
+            const oldSkewerName = originalItem.skewerName;
+
+            console.log(`[CART] Trocando espeto do item ${oldItemId} de '${oldSkewerName}' para '${newSkewerId}'.`);
+
+            cartItems.splice(itemIndex, 1);
+            const newItemId = `${newSkewerId}-${type}`;
+            
+            const existingNewItem = cartItems.find(item => item.id === newItemId);
+            if (existingNewItem) {
+                existingNewItem.quantity += quantity;
+            } else {
+                const skewer = espetosData.find(s => s.id === newSkewerId);
+                cartItems.push({ id: newItemId, skewerId: skewer.id, skewerName: skewer.name, type: type, price: prices[type], quantity: quantity });
+            }
+            
+            console.log('[CART] Carrinho atualizado após troca de espeto:', cartItems);
+            localStorage.setItem('cartItems', JSON.stringify(cartItems));
+            renderCartApp();
+        }
+
+        function renderCartApp() {
+            const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+            cartBadge.textContent = totalItems;
+            cartBadge.classList.toggle('visible', totalItems > 0);
+            
+            if (cartItems.length === 0) {
+                cartContent.innerHTML = `<div class="text-center p-10 bg-white rounded-lg shadow"><h2 class="text-3xl font-semibold mb-4">Seu Carrinho está Vazio</h2><p class="text-stone-500">Adicione itens do cardápio para começar.</p></div>`;
+                updateDynamicCartButton();
+                return;
+            }
+            
+            const total = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            cartContent.innerHTML = `
+                <div class="bg-white rounded-lg shadow-lg">
+                    <div class="p-6 border-b border-stone-200"><h2 class="text-3xl font-semibold text-center">Seu Carrinho</h2></div>
+                    <div class="p-6 space-y-4">
+                        ${cartItems.map(item => `
+                            <div class="flex items-center justify-between gap-2 sm:gap-4">
+                                <div class="flex-grow">
+                                    <select onchange="updateCartItemSkewerApp('${item.id}', this.value)" class="font-bold text-lg bg-white border border-stone-300 rounded-md p-2 focus:outline-none focus:ring-amber-500 focus:border-amber-500 w-full mb-2">
+                                        ${espetosData.map(skewer => `<option value="${skewer.id}" ${item.skewerId === skewer.id ? 'selected' : ''}>${skewer.name}</option>`).join('')}
+                                    </select>
+                                    <button onclick="updateCartItemTypeApp('${item.id}')" class="text-sm font-medium text-white ${item.type === 'completo' ? 'bg-green-600' : 'bg-amber-600'} px-3 py-1 rounded-full transition-transform hover:scale-105">${item.type} &rightleftarrows;</button>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button onclick="changeQuantityApp('${item.id}', -1)" class="w-8 h-8 bg-stone-200 hover:bg-stone-300 rounded-full font-bold text-lg flex items-center justify-center transition-colors">-</button>
+                                    <span class="w-8 text-center font-semibold text-lg">${item.quantity}</span>
+                                    <button onclick="changeQuantityApp('${item.id}', 1)" class="w-8 h-8 bg-stone-200 hover:bg-stone-300 rounded-full font-bold text-lg flex items-center justify-center transition-colors">+</button>
+                                </div>
+                                <div class="text-lg font-semibold w-24 text-right">R$ ${(item.price * item.quantity).toFixed(2)}</div>
+                            </div>`).join('')}
+                    </div>
+                    <div class="p-6 bg-stone-50 rounded-b-lg flex flex-col sm:flex-row items-center justify-between gap-4 flex-wrap">
+                        <button onclick="switchToViewApp('cardapio-view')" class="w-full sm:w-auto bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-6 rounded-lg transition-colors">Adicionar mais itens</button>
+                        <button onclick="promptClearCart()" class="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition-colors">Limpar Carrinho</button>
+                        <div class="text-xl font-bold">Total: <span class="text-green-700">R$ ${total.toFixed(2)}</span></div>
+                        <button onclick="promptPaymentMethodApp()" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg">Finalizar Pedido</button>
+                    </div>
+                </div>`;
+            updateDynamicCartButton();
+        }
+
+        function promptClearCart() {
+            document.getElementById('clear-cart-confirm-modal').classList.add('visible');
+        }
+
+        function clearCartApp() {
+            cartItems = [];
+            localStorage.setItem('cartItems', JSON.stringify(cartItems));
+            renderCartApp();
+            showToast('Carrinho limpo com sucesso!', 'info');
+            document.getElementById('clear-cart-confirm-modal').classList.remove('visible');
+        }
+
+        function setupClearCartModal() {
+            const modal = document.getElementById('clear-cart-confirm-modal');
+            const confirmBtn = document.getElementById('confirm-clear-cart-btn');
+            const cancelBtn = document.getElementById('cancel-clear-cart-btn');
+
+            confirmBtn.addEventListener('click', clearCartApp);
+            cancelBtn.addEventListener('click', () => {
+                modal.classList.remove('visible');
+            });
+        }
+
+
+        function promptPaymentMethodApp() {
+            if (cartItems.length === 0) {
+                showToast('Seu carrinho está vazio!', 'warning');
+                return;
+            }
+            console.log('[ORDER] Iniciando finalização do pedido. Abrindo modal de pagamento.');
+            paymentModal.classList.add('visible');
+        }
+
+        function confirmAndSendOrderApp(paymentMethod, proofData = null) {
+            let orderCounter = parseInt(localStorage.getItem('orderCounter') || '1');
+            const orderGroupId = 'group-' + Date.now();
+            console.group(`[ORDER] Confirmando e enviando pedido. Grupo: ${orderGroupId}, Método: ${paymentMethod}`);
+            
+            const newOrders = cartItems.map(item => {
+                const order = {
+                    id: 'order-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9), 
+                    orderGroupId: orderGroupId,
+                    displayId: orderCounter,
+                    clientFirstName: clientFirstName,
+                    clientCpf: clientId, 
+                    skewerName: item.skewerName, 
+                    type: item.type, 
+                    price: item.price, 
+                    quantity: item.quantity,
+                    paymentMethod: paymentMethod,
+                    timestamp: new Date().toISOString(),
+                    proof: proofData
+                };
+                return order;
+            });
+            localStorage.setItem('orderCounter', orderCounter + 1);
+            
+            activeOrders = [...newOrders, ...activeOrders];
+            cartItems = [];
+            
+            localStorage.setItem('activeOrders', JSON.stringify(activeOrders));
+            localStorage.setItem('cartItems', JSON.stringify(cartItems));
+            
+            console.log('[ORDER] Pedido confirmado. Carrinho limpo. Pedidos ativos atualizados.');
+            console.groupEnd();
+
+            renderCartApp();
+            renderActiveOrdersApp();
+            showToast('Pedido confirmado e enviado!', 'info');
+            switchToViewApp('active-orders-view');
+        }
+
+        function completeOrderGroupApp(groupId) {
+            const ordersToFinalize = activeOrders.filter(o => o.orderGroupId === groupId);
+            
+            if (ordersToFinalize.length > 0) {
+                const completedTimestamp = new Date().toISOString();
+                ordersToFinalize.forEach(order => {
+                    order.completedTimestamp = completedTimestamp;
+                });
+
+                orderHistory.unshift(...ordersToFinalize);
+                
+                activeOrders = activeOrders.filter(o => o.orderGroupId !== groupId);
+                
+                console.log(`[ORDER] Movendo grupo de pedidos ${groupId} para o histórico.`, ordersToFinalize);
+                
+                localStorage.setItem('activeOrders', JSON.stringify(activeOrders));
+                localStorage.setItem('orderHistory', JSON.stringify(orderHistory));
+                
+                renderAllApp();
+                
+                showToast('Pedido marcado como recebido!', 'info');
+                switchToViewApp('finalizado-view');
+            } else {
+                console.error(`[ORDER] Tentativa de mover grupo de pedidos para o histórico falhou. ID do grupo não encontrado: ${groupId}`);
+            }
+        }
+
+        function renderActiveOrdersApp() {
+            let ordersToDisplay = [];
+            if (userRole === 'master' || userRole === 'gerente') {
+                ordersToDisplay = activeOrders;
+            } else {
+                ordersToDisplay = activeOrders.filter(order => order.clientCpf === clientId);
+            }
+
+            activeOrdersList.innerHTML = '';
+            if (ordersToDisplay.length === 0) {
+                activeOrdersList.innerHTML = `<div class="text-center p-10 bg-white rounded-lg shadow"><p class="text-stone-500">Nenhum pedido para acompanhar no momento.</p></div>`;
+                return;
+            }
+
+            const groupedOrders = ordersToDisplay.reduce((acc, order) => {
+                const groupId = order.orderGroupId;
+                if (!acc[groupId]) {
+                    acc[groupId] = [];
+                }
+                acc[groupId].push(order);
+                return acc;
+            }, {});
+
+            for (const groupId in groupedOrders) {
+                const group = groupedOrders[groupId];
+                const firstOrder = group[0];
+                const orderTime = new Date(firstOrder.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                const groupTotal = group.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+                const itemsHtml = group.map(order => `
+                    <p class="font-bold text-lg mt-2">${order.quantity}x ${order.skewerName} <span class="text-sm font-medium text-white ${order.type === 'completo' ? 'bg-green-600' : 'bg-amber-600'} px-2 py-0.5 rounded-full">${order.type}</span></p>
+                `).join('');
+
+                const orderEl = document.createElement('div');
+                orderEl.className = 'bg-white rounded-lg shadow p-4 flex items-center justify-between flex-wrap gap-4';
+                orderEl.innerHTML = `
+                    <div class="flex-grow">
+                        <p class="font-bold text-lg">Pedido #${firstOrder.displayId}: ${firstOrder.clientFirstName}</p>
+                        <p class="text-sm text-stone-500">${firstOrder.clientCpf}</p>
+                        <div class="mt-2 border-t pt-2">${itemsHtml}</div>
+                        <p class="text-sm text-stone-500 mt-2">Pedido às: ${orderTime}</p>
+                        <p class="text-sm font-semibold text-blue-800 mt-1">Pagamento: ${firstOrder.paymentMethod}</p>
+                        <p class="text-sm font-semibold text-amber-800 mt-1">Estimativa: 15-20 min</p>
+                    </div>
+                    <div class="flex flex-col items-end justify-between self-stretch">
+                         <p class="font-bold text-xl text-green-700">R$ ${groupTotal.toFixed(2)}</p>
+                         <button onclick="promptCompleteOrder('${groupId}')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors mt-4">Recebi o Pedido</button>
+                    </div>`;
+                activeOrdersList.appendChild(orderEl);
+            }
+        }
+
+        function renderFinishedOrdersApp() {
+            const userFinishedOrders = orderHistory.filter(order => order.clientCpf === clientId);
+            finalizadoOrdersList.innerHTML = '';
+             if (userFinishedOrders.length === 0) {
+                finalizadoOrdersList.innerHTML = `<div class="text-center p-10 bg-white rounded-lg shadow"><p class="text-stone-500">Você ainda não finalizou nenhum pedido.</p></div>`;
+                return;
+            }
+            renderOrderList(finalizadoOrdersList, userFinishedOrders, false);
+        }
+
+        function renderOrderHistoryApp() {
+            historyOrdersList.innerHTML = '';
+            if (orderHistory.length === 0) {
+                historyOrdersList.innerHTML = `<div class="text-center p-10 bg-white rounded-lg shadow"><p class="text-stone-500">Nenhum pedido no histórico.</p></div>`;
+                return;
+            }
+            renderOrderList(historyOrdersList, orderHistory, true);
+        }
+
+        function renderOrderList(container, orders, isAdminView) {
+            container.innerHTML = '';
+            const groupedByDate = orders.reduce((acc, order) => {
+                const dateObj = new Date(order.completedTimestamp);
+                const sortableDate = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+                if (!acc[sortableDate]) {
+                    acc[sortableDate] = [];
+                }
+                acc[sortableDate].push(order);
+                return acc;
+            }, {});
+
+            const sortedDateKeys = Object.keys(groupedByDate).sort().reverse();
+
+            sortedDateKeys.forEach(dateKey => {
+                const dateOrders = groupedByDate[dateKey];
+                const groupedByOrderGroup = dateOrders.reduce((acc, order) => {
+                    const groupId = order.orderGroupId;
+                    if (!acc[groupId]) {
+                        acc[groupId] = [];
+                    }
+                    acc[groupId].push(order);
+                    return acc;
+                }, {});
+
+                const displayDate = new Date(dateOrders[0].completedTimestamp).toLocaleDateString('pt-BR', { year: 'numeric', month: 'long', day: 'numeric' });
+                const isToday = dateKey === getTodayDateStringApp();
+                const folderContainer = document.createElement('div');
+                folderContainer.className = 'bg-white rounded-xl shadow-md overflow-hidden';
+
+                let ordersHtml = Object.values(groupedByOrderGroup).map(group => {
+                    const firstOrder = group[0];
+                    const orderTime = new Date(firstOrder.completedTimestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    const groupTotal = group.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+                    let proofButtons = '';
+                    if (isAdminView && firstOrder.proof && firstOrder.proof.fileData) {
+                        proofButtons = `
+                            <div class="mt-2 flex gap-2">
+                                <button data-action="show-proof" data-group-id="${firstOrder.orderGroupId}" class="text-xs bg-sky-500 hover:bg-sky-600 text-white font-semibold py-1 px-3 rounded-md transition-colors">Mostrar</button>
+                                <button data-action="download-proof" data-group-id="${firstOrder.orderGroupId}" class="text-xs bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-1 px-3 rounded-md transition-colors">Baixar</button>
+                            </div>`;
+                    }
+
+                    const clientInfoHtml = isAdminView
+                        ? `<p class="font-semibold">Pedido #${firstOrder.displayId}: ${firstOrder.clientFirstName}</p><p class="text-xs text-stone-500">${firstOrder.clientCpf}</p>`
+                        : `<p class="font-semibold">Pedido #${firstOrder.displayId}</p>`;
+                    
+                    const itemsHtml = group.map(order => `
+                        <p class="font-semibold mt-1">${order.quantity}x ${order.skewerName} <span class="text-xs font-medium ${order.type === 'completo' ? 'text-green-800' : 'text-amber-800'}">${order.type}</span> <span class="text-sm text-stone-500">(R$ ${order.price.toFixed(2)})</span></p>
+                    `).join('');
+
+                    return `
+                        <div class="bg-white rounded-lg p-3 flex items-center justify-between flex-wrap gap-2 border-t border-stone-100 first:border-t-0">
+                            <div class="flex-grow">
+                                ${clientInfoHtml}
+                                <div class="mt-1">${itemsHtml}</div>
+                                <p class="text-xs text-stone-500 mt-2">Pagamento: ${firstOrder.paymentMethod}</p>
+                                <p class="text-xs text-stone-500">Concluído às: ${orderTime}</p>
+                                ${proofButtons}
+                            </div>
+                            <div class="text-right"><p class="font-semibold text-stone-600">R$ ${groupTotal.toFixed(2)}</p></div>
+                        </div>`;
+                }).join('');
+
+                folderContainer.innerHTML = `
+                    <div class="history-folder-header p-4 flex justify-between items-center cursor-pointer border-b border-stone-200 hover:bg-stone-50">
+                        <div>
+                            <span class="font-bold text-lg text-amber-800">${displayDate} ${isToday ? '(Hoje)' : ''}</span>
+                            <span class="ml-2 text-sm text-white bg-stone-400 font-semibold px-2 py-0.5 rounded-full">${Object.keys(groupedByOrderGroup).length} pedidos</span>
+                        </div>
+                        <span class="folder-icon text-2xl text-amber-700 font-light">›</span>
+                    </div>
+                    <div class="history-folder-content">
+                        <div class="p-4 space-y-3 bg-stone-50">${ordersHtml}</div>
+                    </div>`;
+                container.appendChild(folderContainer);
+            });
+        }
+
+        function renderUserManagement() {
+            if (userRole !== 'master') {
+                userManagementList.innerHTML = '';
+                return;
+            }
+            const users = JSON.parse(localStorage.getItem('espetaria_users') || '[]');
+            userManagementList.innerHTML = users.map(user => {
+                const isLockedMaster = user.cpf === '078.590.793-99';
+                
+                let controlsHtml = '';
+
+                if (user.passwordResetRequested) {
+                    controlsHtml = `<button data-action="approve-password-reset" data-cpf="${user.cpf}" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">Aprovar Senha</button>`;
+                } else {
+                     if (isLockedMaster && !isMasterRoleUnlocked) {
+                        controlsHtml = `<button data-action="unlock-master" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center gap-2">
+                                            <span class="text-xl">🔒</span>
+                                            <span>Desbloquear Ações</span>
+                                        </button>`;
+                    } else {
+                        controlsHtml = `
+                            <div class="flex items-center gap-2">
+                                <select data-cpf="${user.cpf}" class="role-select bg-white border border-stone-300 rounded-md p-2 focus:ring-amber-500 focus:border-amber-500">
+                                    <option value="comum" ${user.role === 'comum' ? 'selected' : ''}>Comum</option>
+                                    <option value="gerente" ${user.role === 'gerente' ? 'selected' : ''}>Gerente</option>
+                                    <option value="master" ${user.role === 'master' ? 'selected' : ''}>Master</option>
+                                </select>
+                                <button data-action="save-role" data-cpf="${user.cpf}" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Salvar</button>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button data-action="change-password" data-cpf="${user.cpf}" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Mudar Senha</button>
+                            </div>
+                            <div class="flex items-center gap-2">
+                               ${isLockedMaster ? 
+                                 `<button data-action="lock-master" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center gap-2">
+                                     <span class="text-xl">🔓</span>
+                                     <span>Bloquear</span>
+                                  </button>` : 
+                                 `<button data-action="delete-user" data-cpf="${user.cpf}" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Excluir</button>`
+                               }
+                            </div>
+                        `;
+                    }
+                }
+
+                return `
+                <div class="bg-white rounded-lg shadow p-4 flex items-center justify-between flex-wrap gap-4">
+                    <div>
+                        <p class="font-bold text-lg">${user.name}</p>
+                        <p class="text-sm text-stone-500">${user.cpf}</p>
+                    </div>
+                    <div class="flex items-center gap-4 flex-wrap">
+                        ${controlsHtml}
+                    </div>
+                </div>
+            `}).join('');
+        }
+
+        function updateUserRole(cpf, newRole) {
+            if (cpf === '078.590.793-99' && !isMasterRoleUnlocked) {
+                console.warn(`[PERMISSIONS] Tentativa de alterar a função do usuário Master principal bloqueada.`);
+                showToast('Desbloqueie com a senha de segurança para alterar.', 'warning');
+                return;
+            }
+            let users = JSON.parse(localStorage.getItem('espetaria_users') || '[]');
+            const userIndex = users.findIndex(u => u.cpf === cpf);
+            if (userIndex !== -1) {
+                users[userIndex].role = newRole;
+                localStorage.setItem('espetaria_users', JSON.stringify(users));
+                console.log(`[PERMISSIONS] Função do usuário ${cpf} atualizada para ${newRole}.`);
+                showToast('Função do usuário atualizada com sucesso!', 'success');
+                
+                const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+                if(currentUser.cpf === cpf) {
+                    currentUser.role = newRole;
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    userRole = newRole;
+                    applyRolePermissions(userRole);
+                }
+            } else {
+                console.error(`[PERMISSIONS] Falha ao atualizar função: usuário com CPF ${cpf} não encontrado.`);
+                showToast('Erro ao atualizar função do usuário.', 'error');
+            }
+        }
+
+        function updateUserPassword(cpf, newPassword) {
+             if (cpf === '078.590.793-99' && !isMasterRoleUnlocked) {
+                console.warn(`[PERMISSIONS] Tentativa de alterar a senha do usuário Master principal bloqueada.`);
+                showToast('Desbloqueie com a senha de segurança para alterar.', 'warning');
+                return;
+            }
+            let users = JSON.parse(localStorage.getItem('espetaria_users') || '[]');
+            const userIndex = users.findIndex(u => u.cpf === cpf);
+            if(userIndex !== -1) {
+                users[userIndex].password = newPassword;
+                localStorage.setItem('espetaria_users', JSON.stringify(users));
+                console.log(`[PERMISSIONS] Senha do usuário ${cpf} atualizada.`);
+                showToast('Senha atualizada com sucesso!', 'success');
+            } else {
+                console.error(`[PERMISSIONS] Falha ao atualizar senha: usuário com CPF ${cpf} não encontrado.`);
+                showToast('Erro ao atualizar senha.', 'error');
+            }
+        }
+
+        function deleteUser(cpf) {
+            const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+            if (currentUser.cpf === cpf) {
+                showToast('Você não pode excluir sua própria conta enquanto estiver logado.', 'error');
+                return;
+            }
+            if (cpf === '078.590.793-99' && !isMasterRoleUnlocked) {
+                showToast('Desbloqueie com a senha de segurança para excluir o Master.', 'warning');
+                return;
+            }
+
+            let users = JSON.parse(localStorage.getItem('espetaria_users') || '[]');
+            const updatedUsers = users.filter(user => user.cpf !== cpf);
+            localStorage.setItem('espetaria_users', JSON.stringify(updatedUsers));
+            showToast('Usuário excluído com sucesso!', 'success');
+            renderUserManagement();
+        }
+
+        function setupUserManagementListeners() {
+            userManagementList.addEventListener('click', (e) => {
+                const button = e.target.closest('button[data-action]');
+                if (!button) return;
+
+                const action = button.dataset.action;
+                const cpf = button.dataset.cpf;
+                let users = JSON.parse(localStorage.getItem('espetaria_users') || '[]');
+                const user = users.find(u => u.cpf === cpf);
+
+                if (action === 'save-role') {
+                    const select = userManagementList.querySelector(`select[data-cpf="${cpf}"]`);
+                    const newRole = select.value;
+                    updateUserRole(cpf, newRole);
+                } else if (action === 'unlock-master' || action === 'lock-master') {
+                    const unlockModal = document.getElementById('unlock-modal');
+                    const unlockTitle = document.getElementById('unlock-title');
+                    const promptMessage = document.getElementById('unlock-prompt-message');
+                    const unlockForm = document.getElementById('unlock-form');
+                    const submitUnlockBtn = document.getElementById('submit-unlock-btn');
+
+                    if (action === 'unlock-master') {
+                        unlockTitle.textContent = 'Desbloquear Ações';
+                        promptMessage.textContent = `Digite a senha de segurança para alterar as configurações do usuário Master.`;
+                        submitUnlockBtn.textContent = 'Desbloquear';
+                        submitUnlockBtn.classList.replace('bg-green-600', 'bg-red-600');
+                        submitUnlockBtn.classList.replace('hover:bg-green-700', 'hover:bg-red-700');
+                        unlockForm.dataset.actionToPerform = 'unlock';
+                    } else { // lock-master
+                        unlockTitle.textContent = 'Bloquear Ações';
+                        promptMessage.textContent = `Digite a senha de segurança para bloquear as ações do usuário Master.`;
+                        submitUnlockBtn.textContent = 'Bloquear';
+                        submitUnlockBtn.classList.replace('bg-red-600', 'bg-green-600');
+                        submitUnlockBtn.classList.replace('hover:bg-red-700', 'hover:bg-green-700');
+                        unlockForm.dataset.actionToPerform = 'lock';
+                    }
+                    
+                    unlockModal.classList.add('visible');
+
+                } else if (action === 'change-password') {
+                     const modal = document.getElementById('change-password-modal');
+                     const form = document.getElementById('change-password-form');
+                     const userInfo = document.getElementById('change-password-user-info');
+                     userInfo.textContent = `Alterando senha para: ${user.name}`;
+                     form.dataset.cpf = cpf;
+                     modal.classList.add('visible');
+                } else if (action === 'delete-user') {
+                    const modal = document.getElementById('delete-confirm-modal');
+                    const message = document.getElementById('delete-confirm-message');
+                    const confirmBtn = document.getElementById('confirm-delete-btn');
+                    message.textContent = `Tem certeza que deseja excluir o usuário ${user.name}? Esta ação não pode ser desfeita.`;
+                    confirmBtn.dataset.cpf = cpf;
+                    modal.classList.add('visible');
+                } else if (action === 'approve-password-reset') {
+                    const userIndex = users.findIndex(u => u.cpf === cpf);
+                    if (userIndex !== -1) {
+                        users[userIndex].password = '00000000000'; // Reset password
+                        delete users[userIndex].passwordResetRequested;
+                        localStorage.setItem('espetaria_users', JSON.stringify(users));
+                        
+                        const forceResetModal = document.getElementById('force-reset-confirm-modal');
+                        const forceResetMessage = document.getElementById('force-reset-message');
+                        forceResetMessage.textContent = `A senha de ${users[userIndex].name.split(' ')[0]} foi redefinida. Deseja forçar o usuário a criar uma nova senha no próximo login?`;
+                        forceResetModal.dataset.cpf = cpf;
+                        forceResetModal.classList.add('visible');
+                    }
+                }
+            });
+        }
+
+
+        function setupHistoryAccordionApp() {
+            document.body.addEventListener('click', function(e) {
+                const header = e.target.closest('.history-folder-header');
+                if (header) {
+                    const content = header.nextElementSibling;
+                    const icon = header.querySelector('.folder-icon');
+                    
+                    if (content.style.maxHeight) {
+                        console.log('[UI] Fechando pasta do histórico.');
+                        icon.style.transform = 'rotate(0deg)';
+                        content.style.maxHeight = null;
+                    } else {
+                        console.log('[UI] Abrindo pasta do histórico.');
+                        icon.style.transform = 'rotate(90deg)';
+                        content.style.maxHeight = content.scrollHeight + "px";
+                    }
+                    return;
+                }
+
+                const actionButton = e.target.closest('[data-action]');
+                if(actionButton && actionButton.dataset.groupId) {
+                    const { action, groupId } = actionButton.dataset;
+                    const order = orderHistory.find(o => o.orderGroupId === groupId);
+
+                    if (!order || !order.proof) return;
+
+                    if (action === 'show-proof') {
+                        console.log(`[HISTORICO] Mostrando comprovante para o pedido ${groupId}`);
+                        const proofModal = document.getElementById('proof-modal');
+                        const proofContent = document.getElementById('proof-content');
+                        proofContent.innerHTML = ''; // Limpa conteúdo anterior
+                        
+                        if (order.proof.fileType.startsWith('image/')) {
+                            const img = document.createElement('img');
+                            img.src = order.proof.fileData;
+                            img.style.maxWidth = '100%';
+                            img.style.maxHeight = '100%';
+                            img.style.objectFit = 'contain';
+                            proofContent.appendChild(img);
+                        } else {
+                            const iframe = document.createElement('iframe');
+                            iframe.src = order.proof.fileData;
+                            iframe.className = 'w-full h-full';
+                            iframe.frameborder = '0';
+                            proofContent.appendChild(iframe);
+                        }
+                        
+                        proofModal.classList.add('visible');
+
+                    } else if (action === 'download-proof') {
+                        console.log(`[HISTORICO] Baixando comprovante para o pedido ${groupId}`);
+                        const a = document.createElement('a');
+                        a.href = order.proof.fileData;
+                        a.download = order.proof.fileName;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    }
+                }
+            });
+        }
+        
+        function setupSuggestionModalApp() {
+            const chefSuggestionBtn = document.getElementById('chef-suggestion-btn');
+            const closeSuggestionBtn = document.getElementById('close-suggestion-btn');
+            const suggestionModal = document.getElementById('suggestion-modal');
+            const suggestionContent = document.getElementById('suggestion-content');
+            const suggestionActions = document.getElementById('suggestion-actions');
+
+            let allSuggestions = [];
+            let currentSuggestionIndex = 0;
+
+            function shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+            }
+
+            function renderCurrentSuggestion() {
+                if (allSuggestions.length === 0) return;
+                
+                const suggestion = allSuggestions[currentSuggestionIndex];
+                
+                suggestionContent.innerHTML = `
+                    <button id="prev-suggestion-btn" class="absolute left-0 top-1/2 -translate-y-1/2 bg-white/50 hover:bg-white/80 rounded-full w-10 h-10 flex items-center justify-center text-2xl font-bold text-amber-800 shadow-md transition-colors">&larr;</button>
+                    <div class="px-8">
+                        <h4 class="text-xl font-semibold text-stone-800 mb-3">${suggestion.skewerName}</h4>
+                        <p class="text-stone-600">${suggestion.text}</p>
+                    </div>
+                    <button id="next-suggestion-btn" class="absolute right-0 top-1/2 -translate-y-1/2 bg-white/50 hover:bg-white/80 rounded-full w-10 h-10 flex items-center justify-center text-2xl font-bold text-amber-800 shadow-md transition-colors">&rarr;</button>
+                `;
+                
+                suggestionActions.innerHTML = `
+                    <div class="flex gap-4">
+                        <button data-skewer-id="${suggestion.skewerId}" data-skewer-type="simples" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Adicionar Simples</button>
+                        <button data-skewer-id="${suggestion.skewerId}" data-skewer-type="completo" class="w-full bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-4 rounded-lg transition-colors">Adicionar Completo</button>
+                    </div>
+                `;
+            }
+
+            chefSuggestionBtn.addEventListener('click', () => {
+                console.log('[SUGGESTION] Botão "Sugestão do Chef" clicado.');
+                
+                // Regenera e embaralha as sugestões a cada clique
+                allSuggestions = [];
+                espetosData.forEach(skewer => {
+                    skewer.suggestions.forEach(suggestionText => {
+                        allSuggestions.push({
+                            skewerId: skewer.id,
+                            skewerName: skewer.name,
+                            text: suggestionText
+                        });
+                    });
+                });
+                shuffleArray(allSuggestions);
+
+                currentSuggestionIndex = 0;
+                renderCurrentSuggestion();
+                suggestionModal.classList.add('visible');
+            });
+            
+            closeSuggestionBtn.addEventListener('click', () => {
+                console.log('[SUGGESTION] Modal de sugestão fechado.');
+                suggestionModal.classList.remove('visible');
+                // Reseta o conteúdo para a próxima vez que abrir
+                suggestionContent.innerHTML = `
+                    <div class="loader mx-auto"></div>
+                    <p class="ml-4">Gerando uma sugestão deliciosa...</p>`;
+                suggestionActions.innerHTML = '';
+            });
+
+            // Delegação de eventos para os botões dinâmicos
+            suggestionModal.addEventListener('click', (e) => {
+                const target = e.target.closest('button');
+                if (!target) return;
+
+                if (target.id === 'next-suggestion-btn') {
+                    currentSuggestionIndex = (currentSuggestionIndex + 1) % allSuggestions.length;
+                    renderCurrentSuggestion();
+                }
+
+                if (target.id === 'prev-suggestion-btn') {
+                    currentSuggestionIndex = (currentSuggestionIndex - 1 + allSuggestions.length) % allSuggestions.length;
+                    renderCurrentSuggestion();
+                }
+
+                if (target.dataset.skewerId) {
+                    const { skewerId, skewerType } = target.dataset;
+                    addToCartApp(skewerId, skewerType);
+                }
+            });
+        }
+
+        function setupProofModalApp() {
+            const proofModal = document.getElementById('proof-modal');
+            const closeBtn = document.getElementById('close-proof-modal-btn');
+            const proofContent = document.getElementById('proof-content');
+            closeBtn.addEventListener('click', () => {
+                proofModal.classList.remove('visible');
+                proofContent.innerHTML = ''; // Limpa o conteúdo
+            });
+        }
+        
+        function setupDownloadButtons() {
+            // This function is now empty as the buttons are hidden/shown via applyRolePermissions
+            // and the download logic is handled in renderReports
+        }
+
+        function setupGerenciarViewTabs() {
+            const subNavTabs = document.querySelectorAll('.sub-nav-tab');
+            const subViews = document.querySelectorAll('.subview');
+
+            subNavTabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    subNavTabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+
+                    const subviewId = tab.dataset.subview;
+                    subViews.forEach(v => {
+                        v.classList.toggle('active', v.id === subviewId);
+                    });
+                });
+            });
+        }
+
+        function renderReports() {
+            const reportsContent = document.getElementById('reports-content');
+            const downloadButton = document.getElementById('download-reports-btn');
+            
+            if (userRole !== 'master') {
+                reportsContent.innerHTML = '';
+                if(downloadButton) downloadButton.style.display = 'none';
+                return;
+            };
+
+            if(downloadButton) downloadButton.style.display = 'flex';
+
+            if (orderHistory.length === 0) {
+                reportsContent.innerHTML = `<div class="text-center p-10 bg-white rounded-lg shadow"><p class="text-stone-500">Nenhum dado de histórico para gerar relatórios.</p></div>`;
+                return;
+            }
+
+            // 1. Total Revenue
+            const totalRevenue = orderHistory.reduce((sum, order) => sum + (order.price * order.quantity), 0);
+
+            // 2. Total Orders (unique groups)
+            const uniqueOrderIds = new Set(orderHistory.map(order => order.orderGroupId));
+            const totalOrders = uniqueOrderIds.size;
+
+            // 3. Item Stats
+            const itemStats = orderHistory.reduce((acc, order) => {
+                if (!acc[order.skewerName]) {
+                    acc[order.skewerName] = { quantity: 0, revenue: 0 };
+                }
+                acc[order.skewerName].quantity += order.quantity;
+                acc[order.skewerName].revenue += order.price * order.quantity;
+                return acc;
+            }, {});
+
+            // 4. Most Sold Item
+            let mostSoldItem = { name: 'N/A', quantity: 0 };
+            for (const itemName in itemStats) {
+                if (itemStats[itemName].quantity > mostSoldItem.quantity) {
+                    mostSoldItem = { name: itemName, quantity: itemStats[itemName].quantity };
+                }
+            }
+            
+            const reportStats = { totalRevenue, totalOrders, itemStats, mostSoldItem };
+
+
+            reportsContent.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-white p-6 rounded-lg shadow-lg text-center">
+                        <h3 class="text-lg font-semibold text-stone-600">Faturamento Total</h3>
+                        <p class="text-3xl font-bold text-green-700 mt-2">R$ ${totalRevenue.toFixed(2)}</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-lg text-center">
+                        <h3 class="text-lg font-semibold text-stone-600">Total de Pedidos</h3>
+                        <p class="text-3xl font-bold text-blue-700 mt-2">${totalOrders}</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-lg text-center">
+                        <h3 class="text-lg font-semibold text-stone-600">Item Mais Vendido</h3>
+                        <p class="text-3xl font-bold text-amber-800 mt-2">${mostSoldItem.name}</p>
+                        <p class="text-sm text-stone-500">(${mostSoldItem.quantity} unidades)</p>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-lg mt-8">
+                    <h3 class="text-xl font-semibold text-stone-800 mb-4">Faturamento por Item</h3>
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="border-b-2 border-stone-200">
+                                <th class="py-2">Item</th>
+                                <th class="py-2 text-center">Quantidade Vendida</th>
+                                <th class="py-2 text-right">Receita Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${Object.entries(itemStats).map(([name, stats]) => `
+                                <tr class="border-b border-stone-100">
+                                    <td class="py-2 font-semibold">${name}</td>
+                                    <td class="py-2 text-center">${stats.quantity}</td>
+                                    <td class="py-2 text-right">R$ ${stats.revenue.toFixed(2)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+             if(downloadButton) {
+                downloadButton.onclick = () => {
+                    const csvString = convertReportsToCSV(reportStats);
+                    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', 'relatorio_faturamento.csv');
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                };
+            }
+        }
+        
+        function convertReportsToCSV(stats) {
+            let csvContent = [];
+            
+            // Summary Section
+            csvContent.push('Resumo do Faturamento');
+            csvContent.push(`Faturamento Total,"R$ ${stats.totalRevenue.toFixed(2)}"`);
+            csvContent.push(`Total de Pedidos,${stats.totalOrders}`);
+            csvContent.push(`Item Mais Vendido,"${stats.mostSoldItem.name} (${stats.mostSoldItem.quantity} unidades)"`);
+            csvContent.push(''); // Blank line separator
+
+            // Detailed Section
+            csvContent.push('Faturamento por Item');
+            const headers = ['Item', 'Quantidade Vendida', 'Receita Total'];
+            csvContent.push(headers.join(','));
+
+            const rows = Object.entries(stats.itemStats).map(([name, data]) => [
+                `"${name}"`,
+                data.quantity,
+                `"R$ ${data.revenue.toFixed(2)}"`
+            ].join(','));
+            
+            csvContent.push(...rows);
+
+            return csvContent.join('\n');
+        }
+        
+        function updateDynamicCartButton() {
+            const container = document.getElementById('cardapio-actions');
+            let button = document.getElementById('dynamic-cart-btn');
+            const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
+            if (totalItems > 0) {
+                if (!button) {
+                    button = document.createElement('button');
+                    button.id = 'dynamic-cart-btn';
+                    button.className = 'bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg relative';
+                    button.onclick = () => switchToViewApp('cart-view');
+                    container.appendChild(button);
+                }
+                button.innerHTML = `🛒 Ver Carrinho <span class="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">${totalItems}</span>`;
+            } else {
+                if (button) {
+                    button.remove();
+                }
+            }
+        }
+
+        function setupClearCartModal() {
+            const modal = document.getElementById('clear-cart-confirm-modal');
+            const confirmBtn = document.getElementById('confirm-clear-cart-btn');
+            const cancelBtn = document.getElementById('cancel-clear-cart-btn');
+
+            confirmBtn.addEventListener('click', clearCartApp);
+            cancelBtn.addEventListener('click', () => {
+                modal.classList.remove('visible');
+            });
+        }
+        
+        function setupCashConfirmModal() {
+            const modal = document.getElementById('cash-confirm-modal');
+            const confirmBtn = document.getElementById('confirm-cash-payment-btn');
+            const cancelBtn = document.getElementById('cancel-cash-confirm-btn');
+            const closeBtn = document.getElementById('close-cash-confirm-modal-btn');
+            
+            const closeModal = () => modal.classList.remove('visible');
+
+            confirmBtn.addEventListener('click', () => {
+                console.log('[MODAL] Pagamento em dinheiro confirmado.');
+                confirmAndSendOrderApp('Dinheiro');
+                closeModal();
+                document.getElementById('payment-modal').classList.remove('visible');
+            });
+            cancelBtn.addEventListener('click', closeModal);
+            closeBtn.addEventListener('click', closeModal);
+        }
+
+        function promptCompleteOrder(groupId) {
+            const modal = document.getElementById('complete-order-confirm-modal');
+            const confirmBtn = document.getElementById('confirm-complete-order-btn');
+            confirmBtn.dataset.groupId = groupId; // Store the groupId
+            modal.classList.add('visible');
+        }
+
+        function setupCompleteOrderModal() {
+            const modal = document.getElementById('complete-order-confirm-modal');
+            const confirmBtn = document.getElementById('confirm-complete-order-btn');
+            const cancelBtn = document.getElementById('cancel-complete-order-btn');
+            const closeBtn = document.getElementById('close-complete-order-modal-btn');
+
+            const closeModal = () => modal.classList.remove('visible');
+
+            confirmBtn.addEventListener('click', () => {
+                const groupId = confirmBtn.dataset.groupId;
+                if (groupId) {
+                    completeOrderGroupApp(groupId);
+                }
+                closeModal();
+            });
+            cancelBtn.addEventListener('click', closeModal);
+            closeBtn.addEventListener('click', closeModal);
+        }
+
+
+        // --- INITIALIZER ---
+        document.addEventListener('DOMContentLoaded', setupAuth);
+    </script>
+
+</body>
+</html>
+
+
+
